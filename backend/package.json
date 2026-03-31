@@ -12,7 +12,9 @@
   "jest": {
     "preset": "ts-jest",
     "testEnvironment": "node",
-    "testMatch": ["**/test/**/*.test.ts"]
+    "testMatch": [
+      "**/test/**/*.test.ts"
+    ]
   },
   "keywords": [],
   "author": "",
@@ -37,8 +39,12 @@
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
     "@types/node": "^25.5.0",
+    "@types/supertest": "^7.2.0",
     "@types/uuid": "^10.0.0",
     "jest": "^30.3.0",
+    "jest-junit": "^16.0.0",
+    "socket.io-client": "^4.8.3",
+    "supertest": "^7.2.2",
     "ts-jest": "^29.4.6",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2"
