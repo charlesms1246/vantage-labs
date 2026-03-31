@@ -24,6 +24,8 @@ describe("Agent Registration Integration (Filecoin Calibnet)", () => {
     wallet = new ethers.Wallet(PRIVATE_KEY, provider);
     identityRegistry = new ethers.Contract(filecoinAddresses.IdentityRegistry, IdentityRegistryABI, wallet);
     vantageRegistry = new ethers.Contract(filecoinAddresses.VantageAgentRegistry, VantageRegistryABI, wallet);
+    // Warm up the connection so the first test doesn't hit a cold-start timeout
+    await provider.getBlockNumber();
   });
 
   describe("Pre-registered Vantage Agents", () => {

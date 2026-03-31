@@ -17,6 +17,8 @@ describe("Reputation System Integration (Filecoin Calibnet)", () => {
   beforeAll(async () => {
     provider = new ethers.JsonRpcProvider(FILECOIN_RPC, { chainId: 314159, name: "filecoin-calibration" }, { staticNetwork: true });
     wallet = new ethers.Wallet(PRIVATE_KEY, provider);
+    // Warm up connection
+    await provider.getBlockNumber();
 
     reputationRegistry = new ethers.Contract(
       "0x558298297E714312D5670dBe4dbc15E1D240a811",
