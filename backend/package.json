@@ -9,13 +9,6 @@
     "start": "node dist/index.js",
     "test": "jest --passWithNoTests"
   },
-  "jest": {
-    "preset": "ts-jest",
-    "testEnvironment": "node",
-    "testMatch": [
-      "**/test/**/*.test.ts"
-    ]
-  },
   "keywords": [],
   "author": "",
   "license": "ISC",
