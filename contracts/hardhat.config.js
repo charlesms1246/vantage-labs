@@ -46,6 +46,18 @@ module.exports = {
       chainId: 545,
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
     },
+    filecoinCalibnetIntegration: {
+      url: "https://api.calibration.node.glif.io/rpc/v1",
+      chainId: 314159,
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      timeout: 120000,
+    },
+    flowTestnetIntegration: {
+      url: "https://testnet.evm.nodes.onflow.org",
+      chainId: 545,
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      timeout: 120000,
+    },
   },
   etherscan: {
     apiKey: {
