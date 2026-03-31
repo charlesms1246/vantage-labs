@@ -63,7 +63,7 @@ export function Terminal() {
         if (data.sessionId && data.plan) {
           setPendingApproval({
             sessionId: data.sessionId as string,
-            plan: data.plan as Message["content"] extends string ? never : NonNullable<typeof data.plan>,
+            plan: data.plan as NonNullable<typeof data.plan>,
           });
         }
         break;
