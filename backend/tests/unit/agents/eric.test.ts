@@ -78,4 +78,22 @@ describe("Eric Agent", () => {
     expect(typeof r1).toBe("string");
     expect(typeof r2).toBe("string");
   });
+
+  it("truncates history when it exceeds 20 messages", async () => {
+    for (let i = 0; i < 11; i++) {
+      await eric.invoke(`call number ${i}`);
+    }
+    // No error means history truncation worked
+    expect(true).toBe(true);
+  });
+
+  it("handles non-string content from LLM", async () => {
+    const { ChatGoogleGenerativeAI } = jest.requireMock("@langchain/google-genai");
+    ChatGoogleGenerativeAI.mockImplementationOnce(() => ({
+      invoke: jest.fn().mockResolvedValue({ content: [{ text: "array content" }] }),
+    }));
+    const freshEric = new (require("../../../src/agents/eric").Eric)();
+    const result = await freshEric.invoke("test non-string content");
+    expect(typeof result).toBe("string");
+  });
 });

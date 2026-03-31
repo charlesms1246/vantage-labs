@@ -50,6 +50,13 @@ describe("Market Analysis Tools", () => {
       expect(parsed).toHaveProperty("token", "FLOW");
     });
 
+    it("uses input as token when JSON has no token field", async () => {
+      const input = JSON.stringify({ other: "value" });
+      const result = await tool._call(input);
+      const parsed = JSON.parse(result);
+      expect(parsed).toHaveProperty("token", input);
+    });
+
     it("includes timestamp in result", async () => {
       const result = await tool._call(JSON.stringify({ token: "BTC" }));
       const parsed = JSON.parse(result);

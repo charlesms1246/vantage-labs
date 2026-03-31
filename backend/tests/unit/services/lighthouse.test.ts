@@ -30,6 +30,7 @@ describe("LighthouseService", () => {
       const cid = await lighthouseService.upload(JSON.stringify({ key: "value" }));
       expect(cid).toBe("QmMockCID123");
     });
+
   });
 
   describe("getGatewayUrl", () => {

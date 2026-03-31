@@ -52,6 +52,13 @@ describe("Contract Tools", () => {
       expect(parsed).toHaveProperty("spec");
     });
 
+    it("uses input as spec when JSON has no spec field", async () => {
+      const input = JSON.stringify({ other: "value" });
+      const result = await tool._call(input);
+      const parsed = JSON.parse(result);
+      expect(parsed).toHaveProperty("spec", input);
+    });
+
     it("includes a note about code generation", async () => {
       const result = await tool._call(JSON.stringify({ spec: "test" }));
       const parsed = JSON.parse(result);

@@ -21,5 +21,6 @@ module.exports = {
   testTimeout: 30000,
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/src/$1",
+    "^uuid$": "<rootDir>/tests/__mocks__/uuid.js",
   },
 };

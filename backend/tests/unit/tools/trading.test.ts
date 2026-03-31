@@ -61,6 +61,12 @@ describe("Trading Tools", () => {
       expect(parsed.verified).toBe(true);
     });
 
+    it("uses parseInt when JSON has no agentId field", async () => {
+      const result = await tool._call(JSON.stringify({ other: "value" }));
+      const parsed = JSON.parse(result);
+      expect(parsed).toHaveProperty("verified");
+    });
+
     it("returns verified false when agent not found", async () => {
       sharedContractImpl.ownerOf.mockRejectedValueOnce(new Error("Not found"));
       const result = await tool._call(JSON.stringify({ agentId: 999 }));

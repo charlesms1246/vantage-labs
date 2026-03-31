@@ -123,5 +123,13 @@ describe("Creative Tools", () => {
       const parsed = JSON.parse(result);
       expect(parsed).toHaveProperty("tweet");
     });
+
+    it("uses input as context when JSON has no context field", async () => {
+      const input = JSON.stringify({ other: "value" });
+      const result = await tool._call(input);
+      const parsed = JSON.parse(result);
+      expect(parsed).toHaveProperty("tweet");
+      expect(parsed.tweet).toContain(input);
+    });
   });
 });
