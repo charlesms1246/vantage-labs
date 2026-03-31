@@ -26,14 +26,13 @@ Explorer: https://calibration.filfox.info/
 
 ## Flow EVM Testnet (Chain ID: 545)
 
-**Status: Pending — wallet has no testnet FLOW balance.**
+Deployed: 2026-03-31
+Deployer: `0xce4389ACb79463062c362fACB8CB04513fA3D8D8`
 
-Fund the deployer address at: https://faucet.flow.com/fund-account
-Deployer address: `0xce4389ACb79463062c362fACB8CB04513fA3D8D8`
-
-After funding, run:
-```bash
-npx hardhat run scripts/deploy/deploy-flow.ts --network flowTestnet
-```
+| Contract | Address |
+|---|---|
+| SampleToken | `0xb3Df63Ac5Ec5648d2E764a7C579148F29858E99D` |
+| SampleNFT | `0x558298297E714312D5670dBe4dbc15E1D240a811` |
+| TippingContract | `0x96A4978752D0fC8FccDe3c168A6a9E1c20B62330` |
 
 Explorer: https://evm-testnet.flowscan.io/
