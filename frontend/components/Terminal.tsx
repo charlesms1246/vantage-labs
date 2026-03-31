@@ -28,7 +28,7 @@ export function Terminal() {
   const [isProcessing, setIsProcessing] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { sendMessage, lastMessage } = useWebSocket();
-  const { sessionId, setPendingApproval } = useSession();
+  const { sessionId } = useSession();
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -60,12 +60,12 @@ export function Terminal() {
 
       case "plan_ready":
         setIsProcessing(false);
-        if (data.sessionId && data.plan) {
-          setPendingApproval({
-            sessionId: data.sessionId as string,
-            plan: data.plan as NonNullable<typeof data.plan>,
-          });
-        }
+        // pendingApproval is set centrally in useWebSocket
+        break;
+
+      case "execution_cancelled":
+        setIsProcessing(false);
+        addMessage({ type: "system", content: "Execution cancelled." });
         break;
 
       case "execution_complete":
