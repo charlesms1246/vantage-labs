@@ -1,0 +1,27 @@
+import dotenv from "dotenv";
+dotenv.config();
+
+export const config = {
+  PORT: parseInt(process.env.PORT || "3001"),
+  NODE_ENV: process.env.NODE_ENV || "development",
+
+  GROQ_API_KEY: process.env.GROQ_API_KEY || "",
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY || "",
+  OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || "",
+
+  DEPLOYER_PRIVATE_KEY: process.env.DEPLOYER_PRIVATE_KEY || "",
+
+  FILECOIN_RPC: process.env.FILECOIN_RPC || "https://api.calibration.node.glif.io/rpc/v1",
+  IDENTITY_REGISTRY_ADDRESS: process.env.IDENTITY_REGISTRY_ADDRESS || "0xb3Df63Ac5Ec5648d2E764a7C579148F29858E99D",
+  REPUTATION_REGISTRY_ADDRESS: process.env.REPUTATION_REGISTRY_ADDRESS || "0x558298297E714312D5670dBe4dbc15E1D240a811",
+  VANTAGE_REGISTRY_ADDRESS: process.env.VANTAGE_REGISTRY_ADDRESS || "0x7Bbfb48BCEDF4B562fAB3cFdcb5974bf7cACd290",
+
+  FLOW_RPC: process.env.FLOW_RPC || "https://testnet.evm.nodes.onflow.org",
+  SAMPLE_TOKEN_ADDRESS: process.env.SAMPLE_TOKEN_ADDRESS || "0xb3Df63Ac5Ec5648d2E764a7C579148F29858E99D",
+  SAMPLE_NFT_ADDRESS: process.env.SAMPLE_NFT_ADDRESS || "0x558298297E714312D5670dBe4dbc15E1D240a811",
+  TIPPING_CONTRACT_ADDRESS: process.env.TIPPING_CONTRACT_ADDRESS || "0x96A4978752D0fC8FccDe3c168A6a9E1c20B62330",
+
+  LIGHTHOUSE_API_KEY: process.env.LIGHTHOUSE_API_KEY || "",
+
+  FRONTEND_URL: process.env.FRONTEND_URL || "http://localhost:3000",
+};
