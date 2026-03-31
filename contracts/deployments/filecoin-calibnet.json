@@ -7,5 +7,11 @@
     "IdentityRegistry": "0xb3Df63Ac5Ec5648d2E764a7C579148F29858E99D",
     "ReputationRegistry": "0x558298297E714312D5670dBe4dbc15E1D240a811",
     "VantageAgentRegistry": "0x7Bbfb48BCEDF4B562fAB3cFdcb5974bf7cACd290"
+  },
+  "agents": {
+    "Eric": 1,
+    "Harper": 2,
+    "Rishi": 3,
+    "Yasmin": 4
   }
 }
