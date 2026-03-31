@@ -39,7 +39,9 @@ const PrivyProviderClientOnly = dynamic(
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <PrivyProviderClientOnly>
-      <SessionProvider>{children}</SessionProvider>
+      <SessionProvider>
+        {children}
+      </SessionProvider>
     </PrivyProviderClientOnly>
   );
 }
