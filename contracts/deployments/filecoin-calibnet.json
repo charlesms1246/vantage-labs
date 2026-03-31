@@ -1,0 +1,11 @@
+{
+  "network": "filecoin-calibnet",
+  "chainId": 314159,
+  "deployedAt": "2026-03-31T02:43:00.925Z",
+  "deployer": "0xce4389ACb79463062c362fACB8CB04513fA3D8D8",
+  "contracts": {
+    "IdentityRegistry": "0xb3Df63Ac5Ec5648d2E764a7C579148F29858E99D",
+    "ReputationRegistry": "0x558298297E714312D5670dBe4dbc15E1D240a811",
+    "VantageAgentRegistry": "0x7Bbfb48BCEDF4B562fAB3cFdcb5974bf7cACd290"
+  }
+}
