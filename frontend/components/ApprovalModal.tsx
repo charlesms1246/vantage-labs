@@ -24,7 +24,7 @@ export function ApprovalModal() {
 
   const handleReject = () => {
     sendMessage({
-      type: "approve",
+      type: "reject",
       sessionId: pendingApproval.sessionId,
       approved: false,
     });

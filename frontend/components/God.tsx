@@ -71,6 +71,7 @@ export class God {
             type: "user_message",
             message: message,
             sessionId: this.sessionId,
+            chatMode: this.chatMode,
         };
 
         console.log(`God sending message: ${JSON.stringify(payload)}`);

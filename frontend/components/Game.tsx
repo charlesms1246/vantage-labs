@@ -147,7 +147,7 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
     const [isInputActive, setIsInputActive] = useState<boolean>(false);
     const [isHoveredIndex, setIsHoveredIndex] = useState<number | null>(null);
     const [inputValue, setInputValue] = useState<string>('');
-    const [chatMode, setChatMode] = useState<'STANDARD' | 'RECURSIVE'>('STANDARD');
+    const [chatMode, setChatMode] = useState<'STANDARD' | 'RECURSIVE'>('RECURSIVE');
     const [notifications, setNotifications] = useState<any[]>([]);
     const [chatMessages, setChatMessages] = useState<{
         id: string;
