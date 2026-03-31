@@ -2,6 +2,11 @@ require("@nomicfoundation/hardhat-toolbox");
 require("@openzeppelin/hardhat-upgrades");
 require("dotenv").config();
 
+// Enable TypeScript test files when running with a JS config
+try {
+  require("ts-node/register/transpile-only");
+} catch (_) {}
+
 module.exports = {
   solidity: {
     version: "0.8.24",
