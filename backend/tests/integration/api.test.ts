@@ -25,43 +25,36 @@ jest.mock("@langchain/openai", () => ({
   })),
 }));
 
-const mockUploadText = jest.fn().mockResolvedValue({ data: { Hash: "QmApiCID" } });
-
-jest.mock("@lighthouse-web3/sdk", () => ({
-  default: {
-    uploadText: mockUploadText,
+jest.mock("../../src/services/filecoin", () => ({
+  filecoinService: {
+    verifyAgent: jest.fn().mockResolvedValue(true),
+    getAgentURI: jest.fn().mockResolvedValue("ipfs://QmTestAgent"),
+    getAgentByName: jest.fn().mockResolvedValue(1n),
+    isVantageAgent: jest.fn().mockResolvedValue(true),
+    giveFeedback: jest.fn().mockResolvedValue("0xabc"),
+    logAction: jest.fn().mockResolvedValue(undefined),
   },
 }));
 
-const mockOwnerOf = jest.fn().mockResolvedValue("0x1234567890123456789012345678901234567890");
-const mockTokenURI = jest.fn().mockResolvedValue("ipfs://QmTestAgent");
-const mockGetAgentByName = jest.fn().mockResolvedValue(1n);
-const mockIsVantageAgent = jest.fn().mockResolvedValue(true);
-const mockGetBlockNumber = jest.fn().mockResolvedValue(12345);
-const mockGetBalance = jest.fn().mockResolvedValue(BigInt("10000000000000000000"));
-const mockMint = jest.fn().mockResolvedValue({ wait: jest.fn().mockResolvedValue({ hash: "0xabc" }) });
-const mockTip = jest.fn().mockResolvedValue({ wait: jest.fn().mockResolvedValue({ hash: "0xdef" }) });
+jest.mock("../../src/services/lighthouse", () => ({
+  lighthouseService: {
+    upload: jest.fn().mockResolvedValue("QmApiCID"),
+    getGatewayUrl: jest.fn().mockImplementation((cid: string) => `https://gateway.lighthouse.storage/ipfs/${cid}`),
+    getFile: jest.fn().mockResolvedValue({}),
+  },
+}));
 
 jest.mock("ethers", () => {
   const actual = jest.requireActual("ethers");
-  return {
-    ...actual,
-    JsonRpcProvider: jest.fn().mockImplementation(() => ({
-      getBalance: mockGetBalance,
-      getBlockNumber: mockGetBlockNumber,
-    })),
-    Contract: jest.fn().mockImplementation(() => ({
-      ownerOf: mockOwnerOf,
-      tokenURI: mockTokenURI,
-      getAgentByName: mockGetAgentByName,
-      isVantageAgent: mockIsVantageAgent,
-      giveFeedback: jest.fn().mockResolvedValue({ wait: jest.fn().mockResolvedValue({ hash: "0xfeed" }) }),
-      mint: mockMint,
-      tip: mockTip,
-    })),
-    Wallet: jest.fn().mockImplementation(() => ({ address: "0xtest" })),
-  };
+  const MockProvider = jest.fn().mockImplementation(() => ({ getBlockNumber: jest.fn().mockResolvedValue(12345) }));
+  return { ...actual, JsonRpcProvider: MockProvider, Contract: jest.fn().mockImplementation(() => ({})), Wallet: jest.fn().mockImplementation(() => ({ address: "0xtest" })), ethers: { ...actual.ethers, JsonRpcProvider: MockProvider } };
 });
+
+jest.mock("@lighthouse-web3/sdk", () => ({
+  default: {
+    uploadText: jest.fn().mockResolvedValue({ data: { Hash: "QmApiCID" } }),
+  },
+}));
 
 import express from "express";
 import request from "supertest";
@@ -76,11 +69,13 @@ app.use("/health", healthRoutes);
 describe("API Routes", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockGetBlockNumber.mockResolvedValue(12345);
-    mockGetAgentByName.mockResolvedValue(1n);
-    mockTokenURI.mockResolvedValue("ipfs://QmTestAgent");
-    mockOwnerOf.mockResolvedValue("0x1234567890123456789012345678901234567890");
-    mockUploadText.mockResolvedValue({ data: { Hash: "QmApiCID" } });
+    jest.requireMock("../../src/services/filecoin").filecoinService.getAgentByName.mockResolvedValue(1n);
+    jest.requireMock("../../src/services/filecoin").filecoinService.getAgentURI.mockResolvedValue("ipfs://QmTestAgent");
+    jest.requireMock("../../src/services/filecoin").filecoinService.verifyAgent.mockResolvedValue(true);
+    jest.requireMock("../../src/services/lighthouse").lighthouseService.upload.mockResolvedValue("QmApiCID");
+    jest.requireMock("../../src/services/lighthouse").lighthouseService.getGatewayUrl.mockImplementation(
+      (cid: string) => `https://gateway.lighthouse.storage/ipfs/${cid}`
+    );
   });
 
   describe("GET /health", () => {
@@ -123,7 +118,7 @@ describe("API Routes", () => {
     });
 
     it("returns 500 on service error", async () => {
-      mockGetAgentByName.mockRejectedValueOnce(new Error("Contract error"));
+      jest.requireMock("../../src/services/filecoin").filecoinService.getAgentByName.mockRejectedValueOnce(new Error("Contract error"));
       const res = await request(app).get("/api/agents");
       expect(res.status).toBe(500);
     });
@@ -138,7 +133,7 @@ describe("API Routes", () => {
     });
 
     it("returns verified false when agent not found", async () => {
-      mockOwnerOf.mockRejectedValueOnce(new Error("Not found"));
+      jest.requireMock("../../src/services/filecoin").filecoinService.verifyAgent.mockResolvedValueOnce(false);
       const res = await request(app).get("/api/agents/999/verify");
       expect(res.status).toBe(200);
       expect(res.body.verified).toBe(false);
@@ -172,7 +167,7 @@ describe("API Routes", () => {
     });
 
     it("returns 500 on upload error", async () => {
-      mockUploadText.mockRejectedValueOnce(new Error("Upload failed"));
+      jest.requireMock("../../src/services/lighthouse").lighthouseService.upload.mockRejectedValueOnce(new Error("Upload failed"));
       const res = await request(app)
         .post("/api/storage/upload")
         .send({ data: "test" });

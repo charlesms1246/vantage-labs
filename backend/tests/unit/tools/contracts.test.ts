@@ -1,34 +1,28 @@
-const mockUploadText = jest.fn().mockResolvedValue({ data: { Hash: "QmContractCID" } });
-
 jest.mock("@lighthouse-web3/sdk", () => ({
   default: {
-    uploadText: mockUploadText,
+    uploadText: jest.fn().mockResolvedValue({ data: { Hash: "QmContractCID" } }),
   },
 }));
 
 jest.mock("ethers", () => {
   const actual = jest.requireActual("ethers");
-  return {
-    ...actual,
-    JsonRpcProvider: jest.fn().mockImplementation(() => ({
-      getBlockNumber: jest.fn().mockResolvedValue(12345),
-    })),
-    Contract: jest.fn().mockImplementation(() => ({
-      ownerOf: jest.fn().mockResolvedValue("0x1234"),
-      tokenURI: jest.fn().mockResolvedValue("ipfs://Qm"),
-      getAgentByName: jest.fn().mockResolvedValue(1n),
-      isVantageAgent: jest.fn().mockResolvedValue(true),
-    })),
-    Wallet: jest.fn().mockImplementation(() => ({ address: "0xtest" })),
-  };
+  const MockProvider = jest.fn().mockImplementation(() => ({ getBlockNumber: jest.fn().mockResolvedValue(12345) }));
+  const MockContract = jest.fn().mockImplementation(() => ({
+    ownerOf: jest.fn().mockResolvedValue("0x1234"),
+    tokenURI: jest.fn().mockResolvedValue("ipfs://Qm"),
+    getAgentByName: jest.fn().mockResolvedValue(1n),
+    isVantageAgent: jest.fn().mockResolvedValue(true),
+  }));
+  const MockWallet = jest.fn().mockImplementation(() => ({ address: "0xtest" }));
+  return { ...actual, JsonRpcProvider: MockProvider, Contract: MockContract, Wallet: MockWallet, ethers: { ...actual.ethers, JsonRpcProvider: MockProvider, Contract: MockContract, Wallet: MockWallet } };
 });
 
 import { GenerateContractTool, StoreProofTool } from "../../../src/tools/contracts";
 
 describe("Contract Tools", () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    mockUploadText.mockResolvedValue({ data: { Hash: "QmContractCID" } });
+    jest.requireMock("@lighthouse-web3/sdk").default.uploadText.mockClear();
+    jest.requireMock("@lighthouse-web3/sdk").default.uploadText.mockResolvedValue({ data: { Hash: "QmContractCID" } });
   });
 
   describe("GenerateContractTool", () => {
@@ -92,7 +86,7 @@ describe("Contract Tools", () => {
 
     it("calls lighthouse uploadText", async () => {
       await tool._call("proof data");
-      expect(mockUploadText).toHaveBeenCalled();
+      expect(jest.requireMock("@lighthouse-web3/sdk").default.uploadText).toHaveBeenCalled();
     });
   });
 });

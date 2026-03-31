@@ -24,18 +24,22 @@ jest.mock("@lighthouse-web3/sdk", () => ({
 
 jest.mock("ethers", () => {
   const actual = jest.requireActual("ethers");
+  const MockContract = jest.fn().mockImplementation(() => ({
+    ownerOf: jest.fn().mockResolvedValue("0x1234567890123456789012345678901234567890"),
+    tokenURI: jest.fn().mockResolvedValue("ipfs://QmTestAgent"),
+    getAgentByName: jest.fn().mockResolvedValue(1n),
+    isVantageAgent: jest.fn().mockResolvedValue(true),
+  }));
+  const MockProvider = jest.fn().mockImplementation(() => ({
+    getBlockNumber: jest.fn().mockResolvedValue(12345),
+  }));
+  const MockWallet = jest.fn().mockImplementation(() => ({ address: "0xtest" }));
   return {
     ...actual,
-    JsonRpcProvider: jest.fn().mockImplementation(() => ({
-      getBlockNumber: jest.fn().mockResolvedValue(12345),
-    })),
-    Contract: jest.fn().mockImplementation(() => ({
-      ownerOf: jest.fn().mockResolvedValue("0x1234567890123456789012345678901234567890"),
-      tokenURI: jest.fn().mockResolvedValue("ipfs://QmTestAgent"),
-      getAgentByName: jest.fn().mockResolvedValue(1n),
-      isVantageAgent: jest.fn().mockResolvedValue(true),
-    })),
-    Wallet: jest.fn().mockImplementation(() => ({ address: "0xtest" })),
+    JsonRpcProvider: MockProvider,
+    Contract: MockContract,
+    Wallet: MockWallet,
+    ethers: { ...actual.ethers, JsonRpcProvider: MockProvider, Contract: MockContract, Wallet: MockWallet },
   };
 });
 
@@ -57,7 +61,7 @@ describe("Yasmin Agent", () => {
   });
 
   it("invoke() returns a string", async () => {
-    const result = await yasmin.invoke("Create NFT metadata for a DeFi artwork");
+    const result = await yasmin.invoke("Help me plan a visual brand strategy");
     expect(typeof result).toBe("string");
     expect(result.length).toBeGreaterThan(0);
   });

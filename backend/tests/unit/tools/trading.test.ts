@@ -1,29 +1,20 @@
-const mockOwnerOf = jest.fn().mockResolvedValue("0x1234567890123456789012345678901234567890");
-const mockIsVantageAgent = jest.fn().mockResolvedValue(true);
-const mockGetAgentByName = jest.fn().mockResolvedValue(1n);
-const mockTokenURI = jest.fn().mockResolvedValue("ipfs://QmAgent");
-const mockMint = jest.fn().mockResolvedValue({ wait: jest.fn().mockResolvedValue({ hash: "0xabc" }) });
-const mockTip = jest.fn().mockResolvedValue({ wait: jest.fn().mockResolvedValue({ hash: "0xdef" }) });
+let sharedContractImpl: any;
 
 jest.mock("ethers", () => {
   const actual = jest.requireActual("ethers");
-  return {
-    ...actual,
-    JsonRpcProvider: jest.fn().mockImplementation(() => ({
-      getBalance: jest.fn().mockResolvedValue(BigInt("10000000000000000000")),
-      getBlockNumber: jest.fn().mockResolvedValue(12345),
-    })),
-    Contract: jest.fn().mockImplementation(() => ({
-      ownerOf: mockOwnerOf,
-      tokenURI: mockTokenURI,
-      getAgentByName: mockGetAgentByName,
-      isVantageAgent: mockIsVantageAgent,
-      giveFeedback: jest.fn().mockResolvedValue({ wait: jest.fn().mockResolvedValue({ hash: "0xfeed" }) }),
-      mint: mockMint,
-      tip: mockTip,
-    })),
-    Wallet: jest.fn().mockImplementation(() => ({ address: "0xtest" })),
+  sharedContractImpl = {
+    ownerOf: jest.fn().mockResolvedValue("0x1234567890123456789012345678901234567890"),
+    tokenURI: jest.fn().mockResolvedValue("ipfs://QmAgent"),
+    getAgentByName: jest.fn().mockResolvedValue(1n),
+    isVantageAgent: jest.fn().mockResolvedValue(true),
+    giveFeedback: jest.fn().mockResolvedValue({ wait: jest.fn().mockResolvedValue({ hash: "0xfeed" }) }),
+    mint: jest.fn().mockResolvedValue({ wait: jest.fn().mockResolvedValue({ hash: "0xabc" }) }),
+    tip: jest.fn().mockResolvedValue({ wait: jest.fn().mockResolvedValue({ hash: "0xdef" }) }),
   };
+  const MockContract = jest.fn().mockImplementation(() => sharedContractImpl);
+  const MockProvider = jest.fn().mockImplementation(() => ({ getBalance: jest.fn().mockResolvedValue(BigInt("10000000000000000000")), getBlockNumber: jest.fn().mockResolvedValue(12345) }));
+  const MockWallet = jest.fn().mockImplementation(() => ({ address: "0xtest" }));
+  return { ...actual, Contract: MockContract, JsonRpcProvider: MockProvider, Wallet: MockWallet, ethers: { ...actual.ethers, Contract: MockContract, JsonRpcProvider: MockProvider, Wallet: MockWallet } };
 });
 
 jest.mock("@lighthouse-web3/sdk", () => ({
@@ -44,8 +35,11 @@ describe("Trading Tools", () => {
 
     beforeEach(() => {
       tool = new VerifyAgentIdentityTool();
-      jest.clearAllMocks();
-      mockOwnerOf.mockResolvedValue("0x1234567890123456789012345678901234567890");
+      // Reset only specific mocks, not all (avoid losing contract impl references)
+      if (sharedContractImpl) {
+        sharedContractImpl.ownerOf.mockResolvedValue("0x1234567890123456789012345678901234567890");
+        sharedContractImpl.isVantageAgent.mockResolvedValue(true);
+      }
     });
 
     it("has correct name", () => {
@@ -67,7 +61,7 @@ describe("Trading Tools", () => {
     });
 
     it("returns verified false when agent not found", async () => {
-      mockOwnerOf.mockRejectedValueOnce(new Error("Not found"));
+      sharedContractImpl.ownerOf.mockRejectedValueOnce(new Error("Not found"));
       const result = await tool._call(JSON.stringify({ agentId: 999 }));
       const parsed = JSON.parse(result);
       expect(parsed.verified).toBe(false);

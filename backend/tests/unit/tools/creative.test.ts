@@ -1,26 +1,20 @@
-const mockUploadText = jest.fn().mockResolvedValue({ data: { Hash: "QmCreativeCID" } });
-
 jest.mock("@lighthouse-web3/sdk", () => ({
   default: {
-    uploadText: mockUploadText,
+    uploadText: jest.fn().mockResolvedValue({ data: { Hash: "QmCreativeCID" } }),
   },
 }));
 
 jest.mock("ethers", () => {
   const actual = jest.requireActual("ethers");
-  return {
-    ...actual,
-    JsonRpcProvider: jest.fn().mockImplementation(() => ({
-      getBlockNumber: jest.fn().mockResolvedValue(12345),
-    })),
-    Contract: jest.fn().mockImplementation(() => ({
-      ownerOf: jest.fn().mockResolvedValue("0x1234"),
-      tokenURI: jest.fn().mockResolvedValue("ipfs://Qm"),
-      getAgentByName: jest.fn().mockResolvedValue(1n),
-      isVantageAgent: jest.fn().mockResolvedValue(true),
-    })),
-    Wallet: jest.fn().mockImplementation(() => ({ address: "0xtest" })),
-  };
+  const MockProvider = jest.fn().mockImplementation(() => ({ getBlockNumber: jest.fn().mockResolvedValue(12345) }));
+  const MockContract = jest.fn().mockImplementation(() => ({
+    ownerOf: jest.fn().mockResolvedValue("0x1234"),
+    tokenURI: jest.fn().mockResolvedValue("ipfs://Qm"),
+    getAgentByName: jest.fn().mockResolvedValue(1n),
+    isVantageAgent: jest.fn().mockResolvedValue(true),
+  }));
+  const MockWallet = jest.fn().mockImplementation(() => ({ address: "0xtest" }));
+  return { ...actual, JsonRpcProvider: MockProvider, Contract: MockContract, Wallet: MockWallet, ethers: { ...actual.ethers, JsonRpcProvider: MockProvider, Contract: MockContract, Wallet: MockWallet } };
 });
 
 import {
@@ -31,8 +25,8 @@ import {
 
 describe("Creative Tools", () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    mockUploadText.mockResolvedValue({ data: { Hash: "QmCreativeCID" } });
+    jest.requireMock("@lighthouse-web3/sdk").default.uploadText.mockClear();
+    jest.requireMock("@lighthouse-web3/sdk").default.uploadText.mockResolvedValue({ data: { Hash: "QmCreativeCID" } });
   });
 
   describe("CreateNFTMetadataTool", () => {
@@ -63,7 +57,7 @@ describe("Creative Tools", () => {
     it("uploads metadata to lighthouse", async () => {
       const input = JSON.stringify({ name: "Test", description: "Desc", imageCID: "QmImg" });
       await tool._call(input);
-      expect(mockUploadText).toHaveBeenCalled();
+      expect(jest.requireMock("@lighthouse-web3/sdk").default.uploadText).toHaveBeenCalled();
     });
 
     it("includes url in response", async () => {
@@ -95,7 +89,7 @@ describe("Creative Tools", () => {
 
     it("calls lighthouse upload", async () => {
       await tool._call("content");
-      expect(mockUploadText).toHaveBeenCalled();
+      expect(jest.requireMock("@lighthouse-web3/sdk").default.uploadText).toHaveBeenCalled();
     });
   });
 
