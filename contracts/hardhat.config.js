@@ -7,6 +7,22 @@ try {
   require("ts-node/register/transpile-only");
 } catch (_) {}
 
+const { subtask } = require("hardhat/config");
+const {
+  TASK_TEST_GET_TEST_FILES,
+} = require("hardhat/builtin-tasks/task-names");
+const path = require("path");
+const glob = require("glob");
+
+// Override the test file collection to include .ts files even with a JS config
+subtask(TASK_TEST_GET_TEST_FILES).setAction(async ({ testFiles }, { config }) => {
+  if (testFiles.length !== 0) {
+    return testFiles.map((x) => path.resolve(process.cwd(), x));
+  }
+  const pattern = path.join(config.paths.tests, "**", "*.{js,ts}");
+  return glob.sync(pattern).filter((f) => !f.endsWith(".d.ts"));
+});
+
 module.exports = {
   solidity: {
     version: "0.8.24",
@@ -16,6 +32,7 @@ module.exports = {
         runs: 200,
       },
       evmVersion: "cancun",
+      viaIR: true,
     },
   },
   networks: {

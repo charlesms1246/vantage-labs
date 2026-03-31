@@ -2,11 +2,12 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "./interfaces/IIdentityRegistry.sol";
 
 /// @title VantageAgentRegistry - Wrapper for registering Vantage Labs agents
 /// @notice Manages registration and lookup of the 4 Vantage agents on-chain
-contract VantageAgentRegistry is Ownable {
+contract VantageAgentRegistry is Ownable, IERC721Receiver {
     /// @dev Identity registry reference
     IIdentityRegistry private immutable _identityRegistry;
 
@@ -86,5 +87,15 @@ contract VantageAgentRegistry is Ownable {
     /// @notice Get the identity registry address
     function getIdentityRegistry() external view returns (address) {
         return address(_identityRegistry);
+    }
+
+    /// @inheritdoc IERC721Receiver
+    function onERC721Received(
+        address,
+        address,
+        uint256,
+        bytes calldata
+    ) external pure override returns (bytes4) {
+        return IERC721Receiver.onERC721Received.selector;
     }
 }
