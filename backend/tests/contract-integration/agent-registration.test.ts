@@ -19,7 +19,8 @@ describe("Agent Registration Integration (Filecoin Calibnet)", () => {
   let vantageRegistry: ethers.Contract;
 
   beforeAll(async () => {
-    provider = new ethers.JsonRpcProvider(FILECOIN_RPC);
+    // Pass network config explicitly to skip auto-detection and avoid cold-start timeout
+    provider = new ethers.JsonRpcProvider(FILECOIN_RPC, { chainId: 314159, name: "filecoin-calibration" }, { staticNetwork: true });
     wallet = new ethers.Wallet(PRIVATE_KEY, provider);
     identityRegistry = new ethers.Contract(filecoinAddresses.IdentityRegistry, IdentityRegistryABI, wallet);
     vantageRegistry = new ethers.Contract(filecoinAddresses.VantageAgentRegistry, VantageRegistryABI, wallet);
@@ -61,6 +62,9 @@ describe("Agent Registration Integration (Filecoin Calibnet)", () => {
   });
 
   describe("Agent Identity Workflow", () => {
+    let registeredAgentId: bigint;
+    let registrationBlockNumber: number;
+
     it("should register a new test agent with simulated Filecoin URI", async () => {
       // Simulate Lighthouse CID (since no real Lighthouse key)
       const simulatedCID = "QmTestIntegrationAgent" + Date.now();
@@ -69,33 +73,28 @@ describe("Agent Registration Integration (Filecoin Calibnet)", () => {
       const tx = await identityRegistry.register(agentURI);
       const receipt = await tx.wait();
       expect(receipt.status).toBe(1);
+      registrationBlockNumber = receipt.blockNumber;
 
-      // Find Registered event
+      // Find Registered event — limit to this block to avoid RPC lookback limit
       const filter = identityRegistry.filters.Registered();
       const events = await identityRegistry.queryFilter(filter, receipt.blockNumber, receipt.blockNumber);
       expect(events.length).toBeGreaterThan(0);
+      registeredAgentId = (events[0] as any).args.agentId;
     });
 
     it("should set and retrieve metadata for a registered agent", async () => {
-      // Get the latest agentId registered by the deployer wallet
-      const filter = identityRegistry.filters.Registered(null, wallet.address);
-      const events = await identityRegistry.queryFilter(filter);
-
-      if (events.length === 0) {
-        console.log("No agents registered by deployer, skipping metadata test");
+      if (!registeredAgentId) {
+        console.log("No agentId from previous test, skipping metadata test");
         return;
       }
-
-      const latestEvent = events[events.length - 1] as any;
-      const agentId = latestEvent.args.agentId;
 
       const key = "integration_test";
       const value = ethers.toUtf8Bytes("phase7_test_value");
 
-      const tx = await identityRegistry.setMetadata(agentId, key, value);
+      const tx = await identityRegistry.setMetadata(registeredAgentId, key, value);
       await tx.wait();
 
-      const retrieved = await identityRegistry.getMetadata(agentId, key);
+      const retrieved = await identityRegistry.getMetadata(registeredAgentId, key);
       expect(ethers.toUtf8String(retrieved)).toBe("phase7_test_value");
     });
   });

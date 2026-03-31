@@ -21,7 +21,7 @@ describe("Flow EVM Execution Integration", () => {
   let tippingContract: ethers.Contract;
 
   beforeAll(async () => {
-    provider = new ethers.JsonRpcProvider(FLOW_RPC);
+    provider = new ethers.JsonRpcProvider(FLOW_RPC, { chainId: 545, name: "flow-evm-testnet" }, { staticNetwork: true });
     wallet = new ethers.Wallet(PRIVATE_KEY, provider);
     sampleToken = new ethers.Contract(flowAddresses.SampleToken, SampleTokenABI, wallet);
     sampleNFT = new ethers.Contract(flowAddresses.SampleNFT, SampleNFTABI, wallet);
@@ -67,8 +67,11 @@ describe("Flow EVM Execution Integration", () => {
 
     it("should return correct tokenURI after minting", async () => {
       // Get the latest minted tokenId by querying Transfer events
+      // Limit block range — Flow EVM testnet restricts getLogs to 10,000 block range
+      const latestBlock = await provider.getBlockNumber();
+      const fromBlock = Math.max(0, latestBlock - 9000);
       const filter = sampleNFT.filters.Transfer(ethers.ZeroAddress, wallet.address);
-      const events = await sampleNFT.queryFilter(filter);
+      const events = await sampleNFT.queryFilter(filter, fromBlock, latestBlock);
       if (events.length > 0) {
         const lastEvent = events[events.length - 1] as any;
         const tokenId = lastEvent.args.tokenId;

@@ -15,7 +15,7 @@ describe("Reputation System Integration (Filecoin Calibnet)", () => {
   let identityRegistry: ethers.Contract;
 
   beforeAll(async () => {
-    provider = new ethers.JsonRpcProvider(FILECOIN_RPC);
+    provider = new ethers.JsonRpcProvider(FILECOIN_RPC, { chainId: 314159, name: "filecoin-calibration" }, { staticNetwork: true });
     wallet = new ethers.Wallet(PRIVATE_KEY, provider);
 
     reputationRegistry = new ethers.Contract(
@@ -98,7 +98,10 @@ describe("Reputation System Integration (Filecoin Calibnet)", () => {
     it("should query NewFeedback events", async () => {
       const ericId = await vantageRegistry.getAgentByName("Eric");
       const filter = reputationRegistry.filters.NewFeedback(ericId);
-      const events = await reputationRegistry.queryFilter(filter);
+      // Limit block range to avoid RPC lookback restriction (Filecoin Calibnet: max 16h40m lookback)
+      const latestBlock = await provider.getBlockNumber();
+      const fromBlock = Math.max(0, latestBlock - 500);
+      const events = await reputationRegistry.queryFilter(filter, fromBlock, latestBlock);
       expect(events.length).toBeGreaterThan(0);
     });
   });
