@@ -6,9 +6,9 @@ export const WS_EVENTS = {
 
   // Server → Client
   AGENT_THINKING: "agent_thinking",
+  AGENT_RESPONSE: "agent_response",
   PLAN_READY: "plan_ready",
   EXECUTION_STARTED: "execution_started",
-  AGENT_UPDATE: "agent_update",
   EXECUTION_COMPLETE: "execution_complete",
   EXECUTION_CANCELLED: "execution_cancelled",
   ERROR: "error",

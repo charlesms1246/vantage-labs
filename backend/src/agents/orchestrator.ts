@@ -64,7 +64,15 @@ Always respond with a JSON plan:
   }
 
   async executeStep(agentName: string, task: string): Promise<string> {
-    const agent = this.agents.get(agentName);
+    // Try exact match first, then case-insensitive match
+    let agent = this.agents.get(agentName);
+    if (!agent) {
+      // Case-insensitive lookup
+      const normalizedName = Array.from(this.agents.keys()).find(
+        name => name.toLowerCase() === agentName.toLowerCase()
+      );
+      agent = normalizedName ? this.agents.get(normalizedName) : undefined;
+    }
     if (!agent) return `Error: Agent ${agentName} not found`;
     return agent.invoke(task);
   }

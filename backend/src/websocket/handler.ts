@@ -77,19 +77,25 @@ export class WebSocketHandler {
 
     try {
       const completedSession = await this.orchestrator.executePlan(session, (update) => {
-        socket.emit(WS_EVENTS.AGENT_UPDATE, { ...update, sessionId: data.sessionId });
+        socket.emit(WS_EVENTS.AGENT_RESPONSE, { ...update, sessionId: data.sessionId });
       });
 
       // Store session log on Filecoin
-      const logCid = await lighthouseService.upload(JSON.stringify(completedSession));
+      let logCid = "";
+      try {
+        logCid = await lighthouseService.upload(JSON.stringify(completedSession));
+      } catch (uploadError) {
+        console.error("[WS] Lighthouse upload failed:", (uploadError as Error).message);
+        logCid = ""; // Continue without CID if upload fails
+      }
 
       this.sessions.set(data.sessionId, { ...completedSession, logCid });
 
       socket.emit(WS_EVENTS.EXECUTION_COMPLETE, {
         sessionId: data.sessionId,
         results: completedSession.results,
-        logCid,
-        logUrl: lighthouseService.getGatewayUrl(logCid),
+        logCid: logCid || undefined,
+        logUrl: logCid ? lighthouseService.getGatewayUrl(logCid) : undefined,
         status: "success",
       });
     } catch (error: unknown) {
