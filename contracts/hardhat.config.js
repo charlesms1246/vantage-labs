@@ -47,4 +47,28 @@ module.exports = {
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
     },
   },
+  etherscan: {
+    apiKey: {
+      flowTestnet: process.env.FLOWSCAN_API_KEY || "abc",
+      filecoinCalibnet: process.env.FILFOX_API_KEY || "abc",
+    },
+    customChains: [
+      {
+        network: "flowTestnet",
+        chainId: 545,
+        urls: {
+          apiURL: "https://evm-testnet.flowscan.io/api",
+          browserURL: "https://evm-testnet.flowscan.io/",
+        },
+      },
+      {
+        network: "filecoinCalibnet",
+        chainId: 314159,
+        urls: {
+          apiURL: "https://calibration.filfox.info/api",
+          browserURL: "https://calibration.filfox.info/",
+        },
+      },
+    ],
+  },
 };
