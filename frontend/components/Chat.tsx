@@ -85,6 +85,7 @@ const Chat = ({ messages, onSendMessage, disabled = false }: ChatProps) => {
                 </div>
                 <div
                     ref={chatContainerRef}
+                    data-testid="chat-output"
                     className={`
                         overflow-y-auto p-4 space-y-4 flex-1
                         transition-all duration-300
@@ -117,6 +118,7 @@ const Chat = ({ messages, onSendMessage, disabled = false }: ChatProps) => {
                     <div className="flex gap-2 items-center">
                         <input
                             type="text"
+                            data-testid="chat-input"
                             value={message}
                             onChange={(e) => setMessage(e.target.value)}
                             disabled={disabled}

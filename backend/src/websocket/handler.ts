@@ -54,6 +54,7 @@ export class WebSocketHandler {
         status: "awaiting_approval",
       });
     } catch (error: unknown) {
+      console.error("[WS] handleUserMessage error:", (error as Error).message);
       socket.emit(WS_EVENTS.ERROR, { message: (error as Error).message, sessionId });
     }
   }
@@ -92,6 +93,7 @@ export class WebSocketHandler {
         status: "success",
       });
     } catch (error: unknown) {
+      console.error("[WS] handleApproval error:", (error as Error).message);
       socket.emit(WS_EVENTS.ERROR, { message: (error as Error).message, sessionId: data.sessionId });
     }
   }
