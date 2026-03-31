@@ -1,4 +1,5 @@
 jest.mock("@lighthouse-web3/sdk", () => ({
+  __esModule: true,
   default: {
     uploadText: jest.fn().mockResolvedValue({ data: { Hash: "QmCreativeCID" } }),
   },

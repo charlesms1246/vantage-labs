@@ -25,6 +25,7 @@ jest.mock("@langchain/openai", () => ({
 }));
 
 jest.mock("@lighthouse-web3/sdk", () => ({
+  __esModule: true,
   default: {
     uploadText: jest.fn().mockResolvedValue({ data: { Hash: "QmLogCID" } }),
   },
