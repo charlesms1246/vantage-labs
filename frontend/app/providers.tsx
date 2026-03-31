@@ -1,27 +1,45 @@
 "use client";
 
-import { PrivyProvider } from "@privy-io/react-auth";
+import dynamic from "next/dynamic";
 import { SessionProvider } from "@/contexts/SessionContext";
-import { flowTestnet } from "viem/chains";
+
+// PrivyProvider must be client-only (no SSR) — it validates appId on init
+const PrivyProviderClientOnly = dynamic(
+  () =>
+    import("@privy-io/react-auth").then((mod) => {
+      const { PrivyProvider } = mod;
+      const { flowTestnet } = require("viem/chains");
+
+      function PrivyWrapper({ children }: { children: React.ReactNode }) {
+        return (
+          <PrivyProvider
+            appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID || ""}
+            config={{
+              loginMethods: ["email", "wallet"],
+              appearance: {
+                theme: "dark",
+                accentColor: "#3B82F6",
+              },
+              embeddedWallets: {
+                ethereum: { createOnLogin: "users-without-wallets" },
+              },
+              defaultChain: flowTestnet,
+              supportedChains: [flowTestnet],
+            }}
+          >
+            {children}
+          </PrivyProvider>
+        );
+      }
+      return PrivyWrapper;
+    }),
+  { ssr: false },
+);
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <PrivyProvider
-      appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID || "clxxxxxxxxxxx"}
-      config={{
-        loginMethods: ["email", "wallet"],
-        appearance: {
-          theme: "dark",
-          accentColor: "#3B82F6",
-        },
-        embeddedWallets: {
-          ethereum: { createOnLogin: "users-without-wallets" },
-        },
-        defaultChain: flowTestnet,
-        supportedChains: [flowTestnet],
-      }}
-    >
+    <PrivyProviderClientOnly>
       <SessionProvider>{children}</SessionProvider>
-    </PrivyProvider>
+    </PrivyProviderClientOnly>
   );
 }
