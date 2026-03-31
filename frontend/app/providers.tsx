@@ -15,7 +15,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           accentColor: "#3B82F6",
         },
         embeddedWallets: {
-          createOnLogin: "users-without-wallets",
+          ethereum: { createOnLogin: "users-without-wallets" },
         },
         defaultChain: flowTestnet,
         supportedChains: [flowTestnet],
