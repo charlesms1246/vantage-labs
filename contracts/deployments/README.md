@@ -36,3 +36,56 @@ Deployer: `0xce4389ACb79463062c362fACB8CB04513fA3D8D8`
 | TippingContract | `0x96A4978752D0fC8FccDe3c168A6a9E1c20B62330` |
 
 Explorer: https://evm-testnet.flowscan.io/
+
+---
+
+## Phase 4 Integration Test Results
+
+Executed: 2026-03-31
+
+### Filecoin Calibnet — `onchain-identity.test.ts`
+
+| Test | Result |
+|---|---|
+| Register new agent, verify Registered event and agentId > 0 | PASS |
+| Retrieve tokenURI containing 'ipfs://' | PASS |
+| Update agent URI via setAgentURI, verify tokenURI changes | PASS |
+| Set and get metadata (ethers.toUtf8Bytes / ethers.toUtf8String) | PASS |
+| Give feedback to Eric (agentId=1), verify getFeedback index 0 | PASS |
+| Retrieve all 4 agents by name, verify isVantageAgent=true | PASS |
+| Verify Eric's role is 'market_analyst' | PASS |
+
+**7 / 7 passed**
+
+Notes:
+- Eric's ERC-721 owner is the VantageAgentRegistry contract (not the deployer directly), so deployer can give feedback to Eric without triggering self-feedback revert.
+- Registered test agents received IDs 5, 6, 7 (IDs 1–4 are Eric, Harper, Rishi, Yasmin).
+
+### Flow EVM Testnet — `onchain-flow.test.ts`
+
+| Test | Result |
+|---|---|
+| Verify SampleToken name='Vantage Token', symbol='VTG' | PASS |
+| Mint 100 tokens to deployer, verify balance increased | PASS |
+| Transfer 10 tokens to random address, verify balance decreased | PASS |
+| Mint NFT with tokenURI, verify receipt.status=1 and tokenURI | PASS |
+| Send 0.001 FLOW tip to deployer (self-tip), verify tipsFor increases | PASS |
+| Withdraw tips, verify receipt.status=1 and balance zeroed | PASS |
+
+**6 / 6 passed**
+
+### Filecoin Calibnet — `cross-chain.test.ts`
+
+| Test | Result |
+|---|---|
+| Harper agentId > 0 and isVantageAgent=true | PASS |
+| Rishi's model is 'claude-3.5-sonnet' | PASS |
+| Cross-chain verification log message | PASS |
+
+**3 / 3 passed**
+
+### Gas Analysis (Filecoin Calibnet)
+
+| Operation | Gas Estimate |
+|---|---|
+| Register Agent (`IdentityRegistry.register`) | 17,046,431 |
