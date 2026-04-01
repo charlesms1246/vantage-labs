@@ -26,6 +26,10 @@ export interface WebSocketMessage {
   type: string;
   agent?: string;
   content?: string;
+  result?: string;
+  status?: string;
+  task?: string;
+  results?: Array<{ agent: string; task: string; result: string }>;
   logCid?: string;
   logUrl?: string;
   onChainTxHash?: string;
