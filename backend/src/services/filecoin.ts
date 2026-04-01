@@ -4,6 +4,7 @@ import { filecoinProvider, getDeployerWallet } from "../config/chains";
 import IdentityRegistryABI from "../../contracts/abis/IdentityRegistry.json";
 import ReputationRegistryABI from "../../contracts/abis/ReputationRegistry.json";
 import VantageAgentRegistryABI from "../../contracts/abis/VantageAgentRegistry.json";
+import { logger } from "./logger";
 
 class FilecoinService {
   private identityRegistry: ethers.Contract;
@@ -65,7 +66,7 @@ class FilecoinService {
 
   async logAction(data: Record<string, unknown>): Promise<void> {
     // Store action log off-chain via Lighthouse; on-chain logging is gas-intensive
-    console.log("[Filecoin] Action logged:", data);
+    logger.info("ONCHAIN", "FilecoinService.logAction", data);
   }
 }
 
