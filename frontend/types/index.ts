@@ -27,6 +27,10 @@ export interface WebSocketMessage {
   agent?: string;
   content?: string;
   logCid?: string;
+  logUrl?: string;
+  onChainTxHash?: string;
+  onChainExplorerUrl?: string;
+  proofTokenId?: string;
   plan?: PendingApproval["plan"];
   sessionId?: string;
   [key: string]: unknown;
