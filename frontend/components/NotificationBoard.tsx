@@ -16,7 +16,10 @@ const NotificationBoard = ({ notifications }: NotificationBoardProps) => {
                     {notifications?.map((notification) => {
                         const agent: string = notification.metadata?.agent || 'System';
                         const status: string | undefined = notification.metadata?.status;
-                        const eventName = status === 'executing' || status === 'complete' ? 'system' : undefined;
+                        const imageUrl: string | undefined = notification.metadata?.url;
+                        const eventName = imageUrl
+                            ? 'image_created'
+                            : (status === 'executing' || status === 'complete' ? 'system' : undefined);
                         const safeMetadata: Record<string, string> | undefined =
                             notification.metadata && typeof notification.metadata === 'object'
                                 ? Object.fromEntries(
