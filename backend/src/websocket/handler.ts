@@ -5,6 +5,7 @@ import { lighthouseService } from "../services/lighthouse";
 import { flowService } from "../services/flow";
 import { WS_EVENTS } from "./events";
 import { SessionState } from "../types";
+import { logger } from "../services/logger";
 
 export class WebSocketHandler {
   private sessions: Map<string, SessionState> = new Map();
@@ -15,22 +16,14 @@ export class WebSocketHandler {
 
   private setupHandlers(): void {
     this.io.on("connection", (socket: Socket) => {
-      console.log(`[WS] Client connected: ${socket.id}`);
+      logger.info("WS", "Client connected", { socketId: socket.id });
 
       socket.on(WS_EVENTS.USER_MESSAGE, async (data) => {
         await this.handleUserMessage(socket, data);
       });
 
-      socket.on(WS_EVENTS.APPROVE, async (data) => {
-        await this.handleApproval(socket, data, true);
-      });
-
-      socket.on(WS_EVENTS.REJECT, async (data) => {
-        await this.handleApproval(socket, data, false);
-      });
-
       socket.on("disconnect", () => {
-        console.log(`[WS] Client disconnected: ${socket.id}`);
+        logger.info("WS", "Client disconnected", { socketId: socket.id });
       });
     });
   }
@@ -40,6 +33,11 @@ export class WebSocketHandler {
     // Prefer walletAddress from message payload; fall back to socket handshake query
     const walletAddress = data.walletAddress || (socket.handshake.query.walletAddress as string) || "";
 
+    logger.info("WS", `Event received: ${WS_EVENTS.USER_MESSAGE}`, {
+      sessionId,
+      messagePreview: data.message.slice(0, 150),
+      walletAddress: walletAddress || undefined,
+    });
     socket.emit(WS_EVENTS.AGENT_THINKING, { agent: "Orchestrator", status: "parsing", sessionId });
 
     try {
@@ -51,36 +49,39 @@ export class WebSocketHandler {
 
       this.sessions.set(sessionId, session);
 
+      let parsedPlan: unknown;
+      try { parsedPlan = JSON.parse(session.plan); } catch { parsedPlan = session.plan; }
+      logger.info("WS", `Event sent: ${WS_EVENTS.PLAN_READY}`, {
+        sessionId,
+        intent: (parsedPlan as Record<string, unknown>)?.intent,
+      });
       socket.emit(WS_EVENTS.PLAN_READY, {
         sessionId,
-        plan: JSON.parse(session.plan),
-        status: "awaiting_approval",
+        plan: parsedPlan,
+        status: "executing",
       });
+
+      // Auto-execute without waiting for client approval
+      await this.executeSession(socket, sessionId);
     } catch (error: unknown) {
-      console.error("[WS] handleUserMessage error:", (error as Error).message);
+      logger.error("WS", "handleUserMessage error", { error: (error as Error).message, sessionId });
       socket.emit(WS_EVENTS.ERROR, { message: (error as Error).message, sessionId });
     }
   }
 
-  private async handleApproval(socket: Socket, data: { sessionId: string }, approved: boolean): Promise<void> {
-    const session = this.sessions.get(data.sessionId);
-
+  private async executeSession(socket: Socket, sessionId: string): Promise<void> {
+    const session = this.sessions.get(sessionId);
     if (!session) {
-      socket.emit(WS_EVENTS.ERROR, { message: "Session not found" });
+      socket.emit(WS_EVENTS.ERROR, { message: "Session not found", sessionId });
       return;
     }
 
-    if (!approved) {
-      socket.emit(WS_EVENTS.EXECUTION_CANCELLED, { sessionId: data.sessionId });
-      this.sessions.delete(data.sessionId);
-      return;
-    }
-
-    socket.emit(WS_EVENTS.EXECUTION_STARTED, { sessionId: data.sessionId });
+    logger.info("WS", `Event sent: ${WS_EVENTS.EXECUTION_STARTED}`, { sessionId });
+    socket.emit(WS_EVENTS.EXECUTION_STARTED, { sessionId });
 
     try {
       const completedSession = await this.orchestrator.executePlan(session, (update) => {
-        socket.emit(WS_EVENTS.AGENT_RESPONSE, { ...update, sessionId: data.sessionId });
+        socket.emit(WS_EVENTS.AGENT_RESPONSE, { ...update, sessionId });
       });
 
       // Store session log on Lighthouse (IPFS)
@@ -88,9 +89,13 @@ export class WebSocketHandler {
       let onChainTxHash = "";
       try {
         logCid = await lighthouseService.upload(JSON.stringify(completedSession));
-        console.log(`[WS] Session log uploaded to Lighthouse: ${logCid}`);
+        logger.info("IPFS", "Session log uploaded to Lighthouse", {
+          cid: logCid,
+          url: lighthouseService.getGatewayUrl(logCid),
+          sessionId,
+        });
       } catch (uploadError) {
-        console.error("[WS] Lighthouse upload failed:", (uploadError as Error).message);
+        logger.error("IPFS", "Lighthouse upload failed", { error: (uploadError as Error).message, sessionId });
       }
 
       // Record Lighthouse CID on-chain (Flow EVM Testnet) via SampleNFT mint
@@ -98,20 +103,26 @@ export class WebSocketHandler {
       let proofTokenId = "";
       if (logCid) {
         try {
-          const proof = await flowService.recordProofOnChain(logCid, `session-${data.sessionId}`);
+          const proof = await flowService.recordProofOnChain(logCid, `session-${sessionId}`);
           onChainTxHash = proof.txHash;
           proofTokenId = proof.tokenId;
           onChainExplorerUrl = proof.explorerUrl;
-          console.log(`[WS] Proof NFT minted on Flow EVM: tokenId=${proofTokenId} tx=${onChainTxHash}`);
+          logger.info("ONCHAIN", "Proof NFT minted on Flow EVM", {
+            tokenId: proofTokenId,
+            txHash: onChainTxHash,
+            explorerUrl: onChainExplorerUrl,
+            sessionId,
+          });
         } catch (chainError) {
-          console.error("[WS] On-chain proof recording failed:", (chainError as Error).message);
+          logger.error("ONCHAIN", "On-chain proof recording failed", { error: (chainError as Error).message, sessionId });
         }
       }
 
-      this.sessions.set(data.sessionId, { ...completedSession, logCid });
+      this.sessions.set(sessionId, { ...completedSession, logCid });
 
+      logger.info("WS", `Event sent: ${WS_EVENTS.EXECUTION_COMPLETE}`, { sessionId, resultCount: completedSession.results.length });
       socket.emit(WS_EVENTS.EXECUTION_COMPLETE, {
-        sessionId: data.sessionId,
+        sessionId,
         results: completedSession.results,
         logCid: logCid || undefined,
         logUrl: logCid ? lighthouseService.getGatewayUrl(logCid) : undefined,
@@ -121,8 +132,8 @@ export class WebSocketHandler {
         status: "success",
       });
     } catch (error: unknown) {
-      console.error("[WS] handleApproval error:", (error as Error).message);
-      socket.emit(WS_EVENTS.ERROR, { message: (error as Error).message, sessionId: data.sessionId });
+      logger.error("WS", "Execution error", { error: (error as Error).message, sessionId });
+      socket.emit(WS_EVENTS.ERROR, { message: (error as Error).message, sessionId });
     }
   }
 }
