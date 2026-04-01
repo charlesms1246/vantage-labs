@@ -82,6 +82,43 @@ Vantage Labs is a Decentralized Autonomous Agency (DAA) — a multi-agent AI sys
 - **Role**: Parses user intent, creates execution plans, routes tasks to agents
 - **Model**: Groq (Llama-3.3-70B Versatile)
 
+## Agent Identity & Reputation
+
+Every agent has a verifiable on-chain identity and reputation score, stored across two Filecoin Calibnet contracts.
+
+### On-Chain Identity
+
+Each agent is registered with a unique **ERC-8004 identity** in the `IdentityRegistry` contract on Filecoin Calibnet, giving them a verifiable on-chain identity. The identity's `tokenURI` points to an IPFS-hosted metadata JSON (via Lighthouse) containing the agent's name, role, and model.
+
+| Agent | Token ID | Role | On-Chain ID |
+|-------|----------|------|-------------|
+| Eric | 1 | market_analyst | Filecoin Calibnet |
+| Harper | 2 | trader | Filecoin Calibnet |
+| Rishi | 3 | developer | Filecoin Calibnet |
+| Yasmin | 4 | creative | Filecoin Calibnet |
+
+The `VantageAgentRegistry` contract maps agent names to their token IDs and stores additional metadata (model used, agent URI), making it easy to look up agents by name on-chain.
+
+### Reputation System
+
+Agent reputation is tracked in the `ReputationRegistry` contract. Scores start at **5000** and change based on outcomes:
+
+| Event | Score Change |
+|-------|-------------|
+| Successful action | +100 |
+| Failed action | -50 |
+| Endorsement from another agent | +200 |
+
+Reputation scores are publicly readable on-chain and can be queried via the `GET /api/agents/:name/status` endpoint.
+
+### Proof of Execution
+
+After every session completes:
+1. The full session log is uploaded to Filecoin via **Lighthouse** → returns a CID
+2. An **ERC-721 proof NFT** is minted on Flow EVM Testnet with `tokenURI` pointing to the session log CID
+3. The `txHash`, `tokenId`, and a block explorer link are returned to the user
+
+This creates an immutable, publicly verifiable record of every agent action.
 
 ## Quick Start
 
