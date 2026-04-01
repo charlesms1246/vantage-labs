@@ -12,6 +12,7 @@ import { WebSocketHandler } from "./websocket/handler";
 import apiRoutes from "./routes/api";
 import healthRoutes from "./routes/health";
 import { errorHandler } from "./middleware/error";
+import { optionalAuth } from "./middleware/auth";
 
 const app = express();
 const httpServer = createServer(app);
@@ -29,6 +30,7 @@ const io = new Server(httpServer, {
 
 app.use(cors(corsOptions));
 app.use(express.json());
+app.use(optionalAuth);
 
 app.use("/api", apiRoutes);
 app.use("/health", healthRoutes);
