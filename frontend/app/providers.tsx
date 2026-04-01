@@ -23,6 +23,13 @@ const PrivyProviderClientOnly = dynamic(
               embeddedWallets: {
                 ethereum: { createOnLogin: "users-without-wallets" },
               },
+              // Force Coinbase Wallet to EOA-only mode — Coinbase Smart Wallet
+              // does not support Flow EVM Testnet (chainId 545) and throws on init.
+              externalWallets: {
+                coinbaseWallet: {
+                  config: { preference: { options: "eoaOnly" } },
+                },
+              },
               defaultChain: flowTestnet,
               supportedChains: [flowTestnet],
             }}

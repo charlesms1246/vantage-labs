@@ -68,13 +68,19 @@ export function Terminal() {
         addMessage({ type: "system", content: "Execution cancelled." });
         break;
 
-      case "execution_complete":
+      case "execution_complete": {
         setIsProcessing(false);
-        addMessage({
-          type: "system",
-          content: `Execution complete. Proof: ipfs://${data.logCid}`,
-        });
+        const parts: string[] = ["✅ Execution complete."];
+        if (data.logCid) {
+          parts.push(`📦 IPFS: https://gateway.lighthouse.storage/ipfs/${data.logCid}`);
+        }
+        if (data.onChainTxHash) {
+          const tokenLabel = data.proofTokenId ? ` (NFT #${data.proofTokenId})` : "";
+          parts.push(`⛓️  Flow EVM${tokenLabel}: ${data.onChainExplorerUrl}`);
+        }
+        addMessage({ type: "system", content: parts.join("\n") });
         break;
+      }
 
       case "error":
         setIsProcessing(false);

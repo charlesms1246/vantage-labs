@@ -72,6 +72,7 @@ export class God {
             message: message,
             sessionId: this.sessionId,
             chatMode: this.chatMode,
+            walletAddress: this.walletAddress,
         };
 
         console.log(`God sending message: ${JSON.stringify(payload)}`);
