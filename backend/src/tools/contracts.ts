@@ -8,6 +8,14 @@ import { logger } from "../services/logger";
 // Load pre-compiled Hardhat artifacts — real bytecode for on-chain deployment
 const ARTIFACTS_DIR = path.resolve(__dirname, "../../../contracts/artifacts/contracts/templates");
 
+// LangChain Tool wraps native tool-call args as { input: "<json-string>" }.
+// This helper unwraps that envelope so _call always gets the real params.
+function parseToolInput(raw: string): Record<string, unknown> {
+  const outer = JSON.parse(raw);
+  if (typeof outer.input === "string") return JSON.parse(outer.input);
+  return outer;
+}
+
 function loadArtifact(contractName: string): { abi: ethers.InterfaceAbi; bytecode: string } {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const artifact = require(`${ARTIFACTS_DIR}/${contractName}.sol/${contractName}.json`);
@@ -22,9 +30,8 @@ export class GenerateContractTool extends Tool {
   async _call(input: string): Promise<string> {
     let params: { type?: string; name?: string; symbol?: string; initialSupply?: number } = {};
     try {
-      params = JSON.parse(input);
+      params = parseToolInput(input) as typeof params;
     } catch {
-      // Try to extract name from plain text
       params = { name: input.trim() || "CustomToken", symbol: "CTK", type: "ERC20" };
     }
 
@@ -81,7 +88,7 @@ export class DeployContractTool extends Tool {
     };
 
     try {
-      parsed = JSON.parse(input);
+      parsed = parseToolInput(input) as typeof parsed;
     } catch {
       return JSON.stringify({ error: "Invalid JSON input — provide bytecode, abi, and optional constructorArgs" });
     }
