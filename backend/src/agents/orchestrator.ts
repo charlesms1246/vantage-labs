@@ -7,28 +7,41 @@ import { SessionState } from "../types";
 export class Orchestrator {
   private agents: Map<string, BaseAgent> = new Map();
   private llm = getLLM("groq");
-  private systemPrompt = `You are the Orchestrator for Vantage Labs, a Decentralized Autonomous Agency.
+  private systemPrompt = `You are the Orchestrator for Vantage Labs, a Decentralized Autonomous Agency (DAA) on Flow EVM Testnet.
 
 Your role:
-1. Parse user intent from natural language
-2. Break complex requests into sub-tasks
-3. Identify which specialist agents are needed:
-   - Eric (market_analyst): Market analysis, yield opportunities, price data
-   - Harper (trader): Trade execution, DeFi operations, token swaps
-   - Rishi (developer): Smart contracts, deployments, technical tasks
-   - Yasmin (creative): NFT creation, marketing content, metadata
-4. Create a clear plan with steps
+1. Parse the user's intent precisely
+2. Break the task into an ordered sequence of agent steps
+3. Design steps so each agent's OUTPUT feeds into the NEXT agent's INPUT — agents collaborate, not work in isolation
+4. Agents available:
+   - Eric (market_analyst): market analysis, yield opportunities, DeFi data, price trends
+   - Harper (trader): DeFi execution, token swaps, transaction preparation
+   - Rishi (developer): smart contract generation + deployment to Flow EVM, technical tasks
+   - Yasmin (creative): NFT image generation (Gemini), NFT metadata creation, marketing, Filecoin uploads
 
-Always respond with a JSON plan:
+IMPORTANT RULES:
+- Agents SPEAK TO EACH OTHER, not to the user. Task strings should be addressed as "Hey [AgentName],"
+- For contract deployment: ALWAYS include Rishi with TWO steps: first generate_contract, then deploy_contract
+- For NFT work: Yasmin generates the image first, then Rishi deploys the NFT contract
+- Each step's task description MUST explicitly say what output from the previous step to use
+- The task must be fully completed on-chain where applicable
+
+Respond ONLY with valid JSON (no markdown, no extra text):
 {
-  "intent": "brief description",
-  "agents": ["agent1", "agent2"],
+  "intent": "one-line description of what will be accomplished",
+  "agents": ["AgentName1", "AgentName2"],
   "steps": [
-    { "agent": "Eric", "task": "specific task" },
-    { "agent": "Harper", "task": "specific task" }
+    {
+      "agent": "Eric",
+      "task": "Hey Eric, analyze the memecoin market on Flow EVM and provide a recommendation for launching a new token. Include suggested name, symbol, and initial supply."
+    },
+    {
+      "agent": "Rishi",
+      "task": "Hey Rishi, using Eric's market analysis, generate the ERC20 contract for the recommended memecoin using generate_contract, then immediately deploy it to Flow EVM Testnet using deploy_contract."
+    }
   ],
   "requiresApproval": true,
-  "onChainActions": ["description of what will happen on-chain"]
+  "onChainActions": ["Deploy ERC20 token contract to Flow EVM Testnet"]
 }`;
 
   registerAgent(agent: BaseAgent): void {
@@ -36,7 +49,6 @@ Always respond with a JSON plan:
   }
 
   async processUserRequest(userInput: string, sessionId: string, walletAddress = ""): Promise<SessionState> {
-    // 1. Parse intent and create plan
     const planResponse = await this.llm.invoke([
       new SystemMessage(this.systemPrompt),
       new HumanMessage(userInput),
@@ -45,10 +57,24 @@ Always respond with a JSON plan:
     let plan: Record<string, unknown>;
     try {
       const content = typeof planResponse.content === "string" ? planResponse.content : "";
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      plan = jsonMatch ? JSON.parse(jsonMatch[0]) : { intent: content, agents: [], steps: [], requiresApproval: true, onChainActions: [] };
+      // Strip markdown code fences if present
+      const cleaned = content.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+      plan = jsonMatch ? JSON.parse(jsonMatch[0]) : {
+        intent: content,
+        agents: [],
+        steps: [],
+        requiresApproval: true,
+        onChainActions: [],
+      };
     } catch {
-      plan = { intent: userInput, agents: [], steps: [], requiresApproval: true, onChainActions: [] };
+      plan = {
+        intent: userInput,
+        agents: [],
+        steps: [],
+        requiresApproval: true,
+        onChainActions: [],
+      };
     }
 
     const session: SessionState = {
@@ -64,10 +90,8 @@ Always respond with a JSON plan:
   }
 
   async executeStep(agentName: string, task: string): Promise<string> {
-    // Try exact match first, then case-insensitive match
     let agent = this.agents.get(agentName);
     if (!agent) {
-      // Case-insensitive lookup
       const normalizedName = Array.from(this.agents.keys()).find(
         name => name.toLowerCase() === agentName.toLowerCase()
       );
@@ -77,15 +101,38 @@ Always respond with a JSON plan:
     return agent.invoke(task);
   }
 
-  async executePlan(session: SessionState, onProgress?: (update: Record<string, unknown>) => void): Promise<SessionState> {
+  async executePlan(
+    session: SessionState,
+    onProgress?: (update: Record<string, unknown>) => void
+  ): Promise<SessionState> {
     const plan = JSON.parse(session.plan);
     const results: unknown[] = [];
 
+    // Accumulate a shared context string — each agent's output is visible to the next
+    let sharedContext = "";
+
     for (const step of (plan.steps || [])) {
       onProgress?.({ agent: step.agent, task: step.task, status: "executing" });
-      const result = await this.executeStep(step.agent, step.task);
+
+      // Enrich the task with context from previous steps
+      const enrichedTask = sharedContext
+        ? `${step.task}\n\n--- Context from previous agents ---\n${sharedContext}\n--- End context ---`
+        : step.task;
+
+      const result = await this.executeStep(step.agent, enrichedTask);
       results.push({ agent: step.agent, task: step.task, result });
-      onProgress?.({ agent: step.agent, task: step.task, status: "complete", result });
+
+      // Append this agent's output to the shared context for subsequent steps
+      sharedContext += `\n\n[${step.agent}]: ${result}`;
+
+      onProgress?.({
+        agent: step.agent,
+        task: step.task,
+        status: "complete",
+        result,
+        // Include partial context so frontend can show richer output
+        contextSoFar: sharedContext.trim(),
+      });
     }
 
     return { ...session, results, status: "complete" };
