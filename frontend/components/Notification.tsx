@@ -1,5 +1,28 @@
 import { truncateAddress } from '@/utils/formatters';
 import Image from 'next/image';
+import React from 'react';
+
+// Renders plain text with URLs converted to clickable <a> tags and markdown [text](url) links resolved
+function linkify(text: string): React.ReactNode[] {
+    const parts: React.ReactNode[] = [];
+    // Match markdown links [label](url) OR bare https?:// URLs
+    const pattern = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<>")\]]+)/g;
+    let last = 0;
+    let m: RegExpExecArray | null;
+    while ((m = pattern.exec(text)) !== null) {
+        if (m.index > last) parts.push(text.slice(last, m.index));
+        if (m[1] && m[2]) {
+            // markdown link
+            parts.push(<a key={m.index} href={m[2]} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline break-all hover:text-blue-800">{m[1]}</a>);
+        } else {
+            // bare URL
+            parts.push(<a key={m.index} href={m[3]} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline break-all hover:text-blue-800">{m[3]}</a>);
+        }
+        last = m.index + m[0].length;
+    }
+    if (last < text.length) parts.push(text.slice(last));
+    return parts;
+}
 
 interface NotificationProps {
     message: string;
@@ -138,12 +161,8 @@ const Notification = ({ message, timestamp, characterName, eventName, metadata }
                     </span>
                 </div>
 
-                <div className={`text-sm w-full text-black ${eventName === 'system' ? 'font-black' : ''}`}>
-                    {message.split(/(?<=[.!?])\s+/).map((sentence, index) => (
-                        <span key={index} className={index === 0 ? 'font-medium' : ''}>
-                            {sentence}{' '}
-                        </span>
-                    ))}
+                <div className={`text-sm w-full text-black ${eventName === 'system' ? 'font-black' : ''} whitespace-pre-wrap break-words`}>
+                    {linkify(message)}
                 </div>
 
                 {metadata && (
