@@ -5,6 +5,52 @@ import { truncateAddress } from '@/utils/formatters';
 import { usePrivy } from '@privy-io/react-auth';
 import { useEffect, useRef, useState } from 'react';
 import { IoSend } from "react-icons/io5";
+import React from 'react';
+
+// Renders text with markdown [label](url) links and bare URLs as clickable <a> tags,
+// and pretty-prints any embedded JSON code blocks for readability.
+function renderMessage(text: string): React.ReactNode {
+    // Strip <think>...</think> blocks (internal model reasoning)
+    const cleaned = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+
+    // Split on JSON fenced code blocks: ```json ... ``` or ``` ... ```
+    const parts: React.ReactNode[] = [];
+    const fenceRegex = /```(?:json)?\s*([\s\S]*?)```/g;
+    let last = 0;
+    let fm: RegExpExecArray | null;
+    while ((fm = fenceRegex.exec(cleaned)) !== null) {
+        if (fm.index > last) parts.push(...linkifySegment(cleaned.slice(last, fm.index)));
+        // Try to pretty-print if JSON
+        let block = fm[1].trim();
+        try {
+            block = JSON.stringify(JSON.parse(block), null, 2);
+        } catch { /* not JSON — show as-is */ }
+        parts.push(
+            <pre key={fm.index} className="bg-gray-100 rounded p-2 text-xs overflow-x-auto my-1 whitespace-pre-wrap break-words">{block}</pre>
+        );
+        last = fm.index + fm[0].length;
+    }
+    if (last < cleaned.length) parts.push(...linkifySegment(cleaned.slice(last)));
+    return <>{parts}</>;
+}
+
+function linkifySegment(text: string): React.ReactNode[] {
+    const nodes: React.ReactNode[] = [];
+    const pattern = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<>")\]]+)/g;
+    let last = 0;
+    let m: RegExpExecArray | null;
+    while ((m = pattern.exec(text)) !== null) {
+        if (m.index > last) nodes.push(text.slice(last, m.index));
+        if (m[1] && m[2]) {
+            nodes.push(<a key={m.index} href={m[2]} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline break-all hover:text-blue-800">{m[1]}</a>);
+        } else {
+            nodes.push(<a key={m.index} href={m[3]} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline break-all hover:text-blue-800">{m[3]}</a>);
+        }
+        last = m.index + m[0].length;
+    }
+    if (last < text.length) nodes.push(text.slice(last));
+    return nodes;
+}
 
 interface ChatMessage {
     id: string;
