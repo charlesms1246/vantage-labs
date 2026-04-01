@@ -50,6 +50,49 @@ class FlowService {
   prepareTxData(action: string, params: Record<string, unknown>): Record<string, unknown> {
     return { action, params, network: "flow-evm-testnet", chainId: 545 };
   }
+
+  /**
+   * Records a Lighthouse/IPFS CID on-chain by minting an NFT on SampleNFT.
+   * The tokenURI is set to the Lighthouse gateway URL so the proof is:
+   *  - An indexed ERC-721 Transfer event visible on FlowScan
+   *  - Queryable by tokenId and tokenURI
+   *  - Directly linked to the Lighthouse IPFS file
+   * Returns { txHash, tokenId, explorerUrl }.
+   */
+  async recordProofOnChain(
+    cid: string,
+    _label = "vantage-session-log"
+  ): Promise<{ txHash: string; tokenId: string; explorerUrl: string }> {
+    const tokenURI = `https://gateway.lighthouse.storage/ipfs/${cid}`;
+    const to = await this.wallet.getAddress();
+
+    const tx = await this.sampleNFT.mint(to, tokenURI);
+    const receipt = await tx.wait();
+    const txHash: string = receipt?.hash ?? tx.hash;
+
+    // Parse tokenId from Transfer event (from=0x0 is a mint)
+    let tokenId = "0";
+    try {
+      const iface = new ethers.Interface([
+        "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)",
+      ]);
+      for (const log of receipt?.logs ?? []) {
+        try {
+          const parsed = iface.parseLog({ topics: log.topics as string[], data: log.data });
+          if (parsed && parsed.name === "Transfer") {
+            tokenId = parsed.args.tokenId.toString();
+            break;
+          }
+        } catch {}
+      }
+    } catch {}
+
+    return {
+      txHash,
+      tokenId,
+      explorerUrl: `https://evm-testnet.flowscan.io/tx/${txHash}`,
+    };
+  }
 }
 
 export const flowService = new FlowService();
