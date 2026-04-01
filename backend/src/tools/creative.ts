@@ -61,12 +61,21 @@ export class CreateNFTMetadataTool extends Tool {
     "Create NFT metadata JSON. Input: JSON with 'name', 'description', 'imageCID' fields. Returns metadata CID.";
 
   async _call(input: string): Promise<string> {
-    const { name, description, imageCID } = JSON.parse(input);
+    let params: Record<string, unknown> = {};
+    try {
+      params = parseToolInput(input);
+    } catch {
+      return JSON.stringify({ error: "Invalid JSON input for create_nft_metadata" });
+    }
+    const name = params.name as string | undefined;
+    const description = params.description as string | undefined;
+    const imageCID = (params.imageCID ?? params.image_cid ?? params.cid) as string | undefined;
+    const attributes = Array.isArray(params.attributes) ? params.attributes : [];
     const metadata = {
       name,
       description,
-      image: `ipfs://${imageCID}`,
-      attributes: [],
+      image: imageCID ? `ipfs://${imageCID}` : undefined,
+      attributes,
       created_by: "Yasmin - Vantage Labs",
     };
     const cid = await lighthouseService.upload(JSON.stringify(metadata));
