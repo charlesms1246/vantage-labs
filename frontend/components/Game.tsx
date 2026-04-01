@@ -264,19 +264,13 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
                 return;
             }
 
-            // agent_response with a completed result → show in character speech bubble + chat
+            // agent_response with a completed result → add to notifications
+            // (Character.tsx's own agent_response listener handles speech bubbles + chat history)
             if (parsed.type === "agent_response" && parsed.status === "complete" && parsed.result) {
-                const agentName: string = (parsed.agent || "").toLowerCase();
-                const charIndex = AGENT_CHARACTER_INDEX[agentName];
                 const resultText = typeof parsed.result === "string"
                     ? parsed.result
                     : JSON.stringify(parsed.result);
 
-                if (charIndex !== undefined && handleCharacterMessageRef.current) {
-                    handleCharacterMessageRef.current(charIndex, resultText);
-                }
-
-                // Also add to notifications with context
                 setNotifications(prev => [{
                     id: crypto.randomUUID(),
                     message: `[${parsed.agent ?? "Agent"}] ${resultText}`,
@@ -308,18 +302,6 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
                     timestamp: new Date(),
                     metadata: null,
                 }, ...prev].slice(0, 50));
-
-                // Ensure each agent result appears in chat (catches any dropped real-time events)
-                if (Array.isArray(parsed.results)) {
-                    for (const r of parsed.results) {
-                        const agentName = (r.agent || "").toLowerCase();
-                        const charIdx = AGENT_CHARACTER_INDEX[agentName];
-                        const resultText = typeof r.result === "string" ? r.result : JSON.stringify(r.result || "");
-                        if (charIdx !== undefined && resultText.trim() && handleCharacterMessageRef.current) {
-                            handleCharacterMessageRef.current(charIdx, resultText);
-                        }
-                    }
-                }
                 return;
             }
         } catch {
@@ -668,9 +650,11 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
             // Clean up WebSocket connections and character instances
             if (charactersRef.current) {
                 charactersRef.current.forEach(character => character.destroy());
+                charactersRef.current = null;
             }
             if (godRef.current) {
                 godRef.current.closeWebSocket();
+                godRef.current = null;
             }
         };
     }, [sessionId, userId, walletAddress, chatMode]);
