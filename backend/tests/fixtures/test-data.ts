@@ -22,12 +22,30 @@ export const mockSessionState = {
   walletAddress: "0x1234567890123456789012345678901234567890",
   messages: [],
   plan: JSON.stringify({
-    intent: "market analysis",
+    intent: "test",
     agents: ["Eric"],
-    steps: [{ agent: "Eric", task: "Analyze market" }],
+    steps: [{ agent: "Eric", task: "analyze market" }],
     requiresApproval: true,
     onChainActions: [],
   }),
-  status: "pending_approval" as const,
+  status: "pending_approval",
   results: [],
+};
+
+export const mockUserMessage = {
+  message: "create a memecoin",
+  sessionId: "test-session-123",
+  walletAddress: "0x1234567890123456789012345678901234567890",
+};
+
+export const mockPlan = {
+  intent: "create a memecoin",
+  agents: ["Rishi", "Harper", "Yasmin"],
+  steps: [
+    { agent: "Rishi", task: "generate smart contract code for memecoin" },
+    { agent: "Harper", task: "deploy the contract to blockchain" },
+    { agent: "Yasmin", task: "create marketing content for the memecoin" },
+  ],
+  requiresApproval: true,
+  onChainActions: ["deploy contract", "mint initial supply"],
 };

@@ -1,18 +1,11 @@
-// Set env vars before any imports
+// Mock environment variables
 process.env.GROQ_API_KEY = "test-groq-key";
 process.env.GEMINI_API_KEY = "test-gemini-key";
 process.env.OPENROUTER_API_KEY = "test-openrouter-key";
 process.env.LIGHTHOUSE_API_KEY = "test-lighthouse-key";
 process.env.DEPLOYER_PRIVATE_KEY = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
 process.env.IDENTITY_REGISTRY_ADDRESS = "0x1234567890123456789012345678901234567890";
-process.env.REPUTATION_REGISTRY_ADDRESS = "0x2234567890123456789012345678901234567890";
-process.env.VANTAGE_REGISTRY_ADDRESS = "0x3234567890123456789012345678901234567890";
-process.env.SAMPLE_TOKEN_ADDRESS = "0x4234567890123456789012345678901234567890";
-process.env.SAMPLE_NFT_ADDRESS = "0x5234567890123456789012345678901234567890";
-process.env.TIPPING_CONTRACT_ADDRESS = "0x6234567890123456789012345678901234567890";
-
-jest.setTimeout(30000);
-
-afterAll(async () => {
-  await new Promise(resolve => setTimeout(resolve, 100));
-});
+process.env.FILECOIN_RPC = "https://api.calibration.node.glif.io/rpc/v1";
+process.env.FLOW_RPC = "https://testnet.evm.nodes.onflow.org";
+process.env.PORT = "3001";
+process.env.FRONTEND_URL = "http://localhost:3000";
