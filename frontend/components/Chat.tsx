@@ -152,7 +152,7 @@ const Chat = ({ messages, onSendMessage, disabled = false }: ChatProps) => {
                                     {msg.timestamp.toLocaleTimeString()}
                                 </span>
                             </div>
-                            <p className="text-sm text-gray-700 break-words">{msg.message}</p>
+                            <div className="text-sm text-gray-700 break-words whitespace-pre-wrap">{renderMessage(msg.message)}</div>
                         </div>
                     ))}
                 </div>
