@@ -3,6 +3,14 @@ import { lighthouseService } from "../services/lighthouse";
 import { getLLM } from "../services/llm";
 import { logger } from "../services/logger";
 
+// LangChain Tool wraps native tool-call args as { input: "<json-string>" }.
+// This helper unwraps that envelope so _call always gets the real params.
+function parseToolInput(raw: string): Record<string, unknown> {
+  const outer = JSON.parse(raw);
+  if (typeof outer.input === "string") return JSON.parse(outer.input);
+  return outer;
+}
+
 export class GenerateImageTool extends Tool {
   name = "generate_image";
   description =
