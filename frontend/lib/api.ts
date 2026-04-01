@@ -3,6 +3,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 class ApiClient {
   private baseUrl: string;
   private token: string | null = null;
+  private walletAddress: string | null = null;
 
   constructor() {
     this.baseUrl = API_URL;
@@ -12,6 +13,10 @@ class ApiClient {
     this.token = token;
   }
 
+  setWalletAddress(address: string) {
+    this.walletAddress = address;
+  }
+
   private async request<T>(
     endpoint: string,
     options: RequestInit = {},
@@ -19,6 +24,7 @@ class ApiClient {
     const headers: HeadersInit = {
       "Content-Type": "application/json",
       ...(this.token && { Authorization: `Bearer ${this.token}` }),
+      ...(this.walletAddress && { "x-wallet-address": this.walletAddress }),
       ...options.headers,
     };
 

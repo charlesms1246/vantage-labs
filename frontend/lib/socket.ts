@@ -60,7 +60,6 @@ class SocketManager {
       "execution_complete",
       "execution_cancelled",
       "error",
-      "session_update",
     ];
 
     events.forEach((event) => {
