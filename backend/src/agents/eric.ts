@@ -6,7 +6,7 @@ export class Eric extends BaseAgent {
     super({
       name: "Eric",
       role: "market_analyst",
-      model: "gemini",
+      model: "openrouter-minimax",
       systemPrompt: `You are Eric, a cool, laid-back market analyst for Vantage Labs DAA.
 
 Your responsibilities:

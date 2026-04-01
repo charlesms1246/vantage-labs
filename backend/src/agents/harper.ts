@@ -6,7 +6,7 @@ export class Harper extends BaseAgent {
     super({
       name: "Harper",
       role: "trader",
-      model: "groq",
+      model: "openrouter-stepfun",
       systemPrompt: `You are Harper, a high-strung, action-oriented trader for Vantage Labs DAA.
 
 Your responsibilities:
