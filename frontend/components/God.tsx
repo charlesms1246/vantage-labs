@@ -10,7 +10,10 @@ export class God {
     walletAddress: string;
     chatMode: 'STANDARD' | 'RECURSIVE';
     private agentResponseHandler: (data: unknown) => void;
+    private agentThinkingHandler: (data: unknown) => void;
+    private executionCompleteHandler: (data: unknown) => void;
     private planReadyHandler: (data: unknown) => void;
+    private errorHandler: (data: unknown) => void;
 
     constructor(
         onMessageReceived: (message: string) => void,
@@ -27,35 +30,37 @@ export class God {
         this.chatMode = chatMode;
         this.walletAddress = walletAddress;
 
-        // Bind handlers
-        this.agentResponseHandler = (data: unknown) => {
+        const forward = (type: string) => (data: unknown) => {
             try {
-                const parsed = data as any;
-                console.log(`God received agent_response: ${JSON.stringify(parsed)}`);
-                this.onMessageReceived(JSON.stringify(parsed));
-            } catch (error) {
-                console.error('Error processing agent_response:', error);
+                const payload = { type, ...(data as object) };
+                this.onMessageReceived(JSON.stringify(payload));
+            } catch (err) {
+                console.error(`God: error forwarding ${type}`, err);
             }
         };
 
-        this.planReadyHandler = (data: unknown) => {
-            try {
-                const parsed = data as any;
-                console.log(`God received plan_ready: ${JSON.stringify(parsed)}`);
-                this.onMessageReceived(JSON.stringify(parsed));
-            } catch (error) {
-                console.error('Error processing plan_ready:', error);
-            }
+        this.agentResponseHandler = forward("agent_response");
+        this.agentThinkingHandler = forward("agent_thinking");
+        this.executionCompleteHandler = forward("execution_complete");
+        this.planReadyHandler = forward("plan_ready");
+        this.errorHandler = (data: unknown) => {
+            const msg = (data as any)?.message || JSON.stringify(data);
+            this.onError(msg);
         };
 
-        // Register socketManager listeners
         socketManager.on('agent_response', this.agentResponseHandler);
+        socketManager.on('agent_thinking', this.agentThinkingHandler);
+        socketManager.on('execution_complete', this.executionCompleteHandler);
         socketManager.on('plan_ready', this.planReadyHandler);
+        socketManager.on('error', this.errorHandler);
     }
 
     public closeWebSocket() {
         socketManager.off('agent_response', this.agentResponseHandler);
+        socketManager.off('agent_thinking', this.agentThinkingHandler);
+        socketManager.off('execution_complete', this.executionCompleteHandler);
         socketManager.off('plan_ready', this.planReadyHandler);
+        socketManager.off('error', this.errorHandler);
     }
 
     public setChatMode(chatMode: 'STANDARD' | 'RECURSIVE') {
@@ -63,9 +68,7 @@ export class God {
     }
 
     sendMessage(message: string) {
-        if (!message.trim()) {
-            return;
-        }
+        if (!message.trim()) return;
 
         const payload = {
             type: "user_message",
@@ -77,6 +80,5 @@ export class God {
 
         console.log(`God sending message: ${JSON.stringify(payload)}`);
         socketManager.send('user_message', payload);
-        console.log(`God sent message: ${JSON.stringify(payload)}`);
     }
 }

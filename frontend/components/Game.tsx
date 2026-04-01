@@ -236,14 +236,77 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
         }, 5000);
     }, []);
 
+    // Maps agent name → character index (0-based, matches Character array order)
+    const AGENT_CHARACTER_INDEX: Record<string, number> = {
+        eric: 0,
+        harper: 1,
+        rishi: 2,
+        yasmin: 3,
+    };
+
     const handleGodMessage = useCallback((message: string) => {
-        // Only add God messages to notifications
+        // Try to parse as a structured agent event
+        try {
+            const parsed = JSON.parse(message);
+
+            // agent_response with a completed result → show in character speech bubble + chat
+            if (parsed.type === "agent_response" && parsed.status === "complete" && parsed.result) {
+                const agentName: string = (parsed.agent || "").toLowerCase();
+                const charIndex = AGENT_CHARACTER_INDEX[agentName];
+                const resultText = typeof parsed.result === "string"
+                    ? parsed.result
+                    : JSON.stringify(parsed.result);
+
+                if (charIndex !== undefined && handleCharacterMessageRef.current) {
+                    handleCharacterMessageRef.current(charIndex, resultText);
+                }
+
+                // Also add to notifications with context
+                setNotifications(prev => [{
+                    id: crypto.randomUUID(),
+                    message: `[${parsed.agent ?? "Agent"}] ${resultText}`,
+                    timestamp: new Date(),
+                    metadata: { agent: parsed.agent, status: parsed.status },
+                }, ...prev].slice(0, 50));
+                return;
+            }
+
+            // agent_thinking → show brief status notification
+            if (parsed.type === "agent_thinking") {
+                setNotifications(prev => [{
+                    id: crypto.randomUUID(),
+                    message: `${parsed.agent ?? "Agent"} is thinking…`,
+                    timestamp: new Date(),
+                    metadata: null,
+                }, ...prev].slice(0, 50));
+                return;
+            }
+
+            // execution_complete → show proof links
+            if (parsed.type === "execution_complete") {
+                const parts: string[] = ["✅ All agents done."];
+                if (parsed.logCid) parts.push(`📦 IPFS: ${parsed.logUrl || `ipfs://${parsed.logCid}`}`);
+                if (parsed.onChainTxHash) parts.push(`⛓️ Flow EVM${parsed.proofTokenId ? ` NFT #${parsed.proofTokenId}` : ""}: ${parsed.onChainExplorerUrl}`);
+                setNotifications(prev => [{
+                    id: crypto.randomUUID(),
+                    message: parts.join("\n"),
+                    timestamp: new Date(),
+                    metadata: null,
+                }, ...prev].slice(0, 50));
+                return;
+            }
+        } catch {
+            // Not JSON — fall through to plain notification
+        }
+
+        // Plain text / unrecognised events
         setNotifications(prev => [{
             id: crypto.randomUUID(),
             message: message,
             timestamp: new Date(),
             metadata: null,
         }, ...prev].slice(0, 50));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const handleGodError = useCallback((error: string) => {
