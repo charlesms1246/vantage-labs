@@ -3,6 +3,7 @@ import { ethers } from "ethers";
 import path from "path";
 import { lighthouseService } from "../services/lighthouse";
 import { flowProvider, getDeployerWallet } from "../config/chains";
+import { logger } from "../services/logger";
 
 // Load pre-compiled Hardhat artifacts — real bytecode for on-chain deployment
 const ARTIFACTS_DIR = path.resolve(__dirname, "../../contracts/artifacts/contracts/templates");
@@ -97,7 +98,7 @@ export class DeployContractTool extends Tool {
       const wallet = getDeployerWallet(flowProvider);
       const factory = new ethers.ContractFactory(abi, bytecode, wallet);
 
-      console.log(`[DeployContractTool] Deploying ${contractLabel} to Flow EVM Testnet...`);
+      logger.info("ONCHAIN", `[Rishi] Deploying ${contractLabel} to Flow EVM Testnet`, { contractLabel, name, symbol, network: "flow-evm-testnet" });
       const contract = await factory.deploy(...constructorArgs);
       await contract.waitForDeployment();
 
@@ -105,7 +106,13 @@ export class DeployContractTool extends Tool {
       const deployTx = contract.deploymentTransaction();
       const txHash = deployTx?.hash ?? "unknown";
 
-      console.log(`[DeployContractTool] Deployed ${contractLabel} at ${address} (tx: ${txHash})`);
+      logger.info("ONCHAIN", `[Rishi] Contract deployed: ${contractLabel}`, {
+        address,
+        txHash,
+        explorerUrl: `https://evm-testnet.flowscan.io/tx/${txHash}`,
+        contractUrl: `https://evm-testnet.flowscan.io/address/${address}`,
+        network: "flow-evm-testnet",
+      });
 
       // Store deployment proof on Lighthouse
       const proof = JSON.stringify({
@@ -120,6 +127,7 @@ export class DeployContractTool extends Tool {
         timestamp: new Date().toISOString(),
       });
       const proofCid = await lighthouseService.upload(proof);
+      logger.info("IPFS", `[Rishi] Deployment proof stored`, { proofCid, proofUrl: lighthouseService.getGatewayUrl(proofCid), contractLabel });
 
       return JSON.stringify({
         success: true,
@@ -135,7 +143,7 @@ export class DeployContractTool extends Tool {
         message: `Successfully deployed ${contractLabel} to Flow EVM Testnet at ${address}`,
       });
     } catch (err) {
-      console.error(`[DeployContractTool] Deployment failed:`, err);
+      logger.error("ONCHAIN", `[Rishi] Deployment failed: ${contractLabel}`, { error: (err as Error).message, contractLabel, network: "flow-evm-testnet" });
       return JSON.stringify({ error: (err as Error).message });
     }
   }

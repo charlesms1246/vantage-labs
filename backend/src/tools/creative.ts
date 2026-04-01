@@ -1,6 +1,7 @@
 import { Tool } from "@langchain/core/tools";
 import { lighthouseService } from "../services/lighthouse";
 import { getLLM } from "../services/llm";
+import { logger } from "../services/logger";
 
 export class GenerateImageTool extends Tool {
   name = "generate_image";
@@ -15,6 +16,7 @@ export class GenerateImageTool extends Tool {
       prompt = JSON.parse(input).prompt || input;
     } catch {}
 
+    logger.info("LLM", "[Yasmin] generate_image: invoking Gemini", { model: "gemini-2.5-flash", promptPreview: prompt.slice(0, 150) });
     const response = await this.gemini.invoke([
       {
         role: "user",
@@ -27,10 +29,12 @@ export class GenerateImageTool extends Tool {
         ? response.content
         : JSON.stringify(response.content);
 
+    logger.info("LLM", "[Yasmin] generate_image: Gemini responded", { contentPreview: content.slice(0, 300) });
     // Upload description to Lighthouse for on-chain reference
     const cid = await lighthouseService.upload(
       JSON.stringify({ prompt, gemini_output: content, generated_by: "Yasmin via gemini-2.5-flash" })
     );
+    logger.info("IPFS", "[Yasmin] generate_image: metadata uploaded to Lighthouse", { cid, url: lighthouseService.getGatewayUrl(cid), promptPreview: prompt.slice(0, 100) });
 
     return JSON.stringify({
       prompt,
@@ -57,6 +61,7 @@ export class CreateNFTMetadataTool extends Tool {
       created_by: "Yasmin - Vantage Labs",
     };
     const cid = await lighthouseService.upload(JSON.stringify(metadata));
+    logger.info("IPFS", "[Yasmin] create_nft_metadata: metadata uploaded", { cid, name, url: lighthouseService.getGatewayUrl(cid) });
     return JSON.stringify({ cid, metadata, url: lighthouseService.getGatewayUrl(cid) });
   }
 }
@@ -68,6 +73,7 @@ export class UploadToFilecoinTool extends Tool {
 
   async _call(input: string): Promise<string> {
     const cid = await lighthouseService.upload(input);
+    logger.info("IPFS", "[Yasmin] upload_to_filecoin: content uploaded", { cid, url: lighthouseService.getGatewayUrl(cid) });
     return JSON.stringify({ cid, url: lighthouseService.getGatewayUrl(cid) });
   }
 }
