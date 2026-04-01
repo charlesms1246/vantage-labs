@@ -271,11 +271,19 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
                     ? parsed.result
                     : JSON.stringify(parsed.result);
 
+                // Extract a Lighthouse image URL if present (for inline image display)
+                const lighthouseMatch = resultText.match(/https:\/\/gateway\.lighthouse\.storage\/ipfs\/[^\s)">\]]+/);
+                const imageUrl = lighthouseMatch?.[0];
+
                 setNotifications(prev => [{
                     id: crypto.randomUUID(),
                     message: `[${parsed.agent ?? "Agent"}] ${resultText}`,
                     timestamp: new Date(),
-                    metadata: { agent: parsed.agent, status: parsed.status },
+                    metadata: {
+                        agent: parsed.agent,
+                        status: parsed.status,
+                        ...(imageUrl ? { url: imageUrl } : {}),
+                    },
                 }, ...prev].slice(0, 50));
                 return;
             }
