@@ -3,6 +3,7 @@ import { getLLM } from "../services/llm";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { v4 as uuidv4 } from "uuid";
 import { SessionState } from "../types";
+import { logger } from "../services/logger";
 
 export class Orchestrator {
   private agents: Map<string, BaseAgent> = new Map();
@@ -49,6 +50,12 @@ Respond ONLY with valid JSON (no markdown, no extra text):
   }
 
   async processUserRequest(userInput: string, sessionId: string, walletAddress = ""): Promise<SessionState> {
+    logger.info("LLM", "[Orchestrator] Generating plan", {
+      agent: "Orchestrator",
+      model: "groq/llama-3.3-70b-versatile",
+      sessionId,
+      inputPreview: userInput.slice(0, 200),
+    });
     const planResponse = await this.llm.invoke([
       new SystemMessage(this.systemPrompt),
       new HumanMessage(userInput),
@@ -76,6 +83,14 @@ Respond ONLY with valid JSON (no markdown, no extra text):
         onChainActions: [],
       };
     }
+
+    logger.info("LLM", "[Orchestrator] Plan generated", {
+      intent: plan.intent,
+      agents: plan.agents,
+      stepCount: Array.isArray(plan.steps) ? plan.steps.length : 0,
+      requiresApproval: plan.requiresApproval,
+      onChainActions: plan.onChainActions,
+    });
 
     const session: SessionState = {
       sessionId,
@@ -111,7 +126,13 @@ Respond ONLY with valid JSON (no markdown, no extra text):
     // Accumulate a shared context string — each agent's output is visible to the next
     let sharedContext = "";
 
-    for (const step of (plan.steps || [])) {
+    const steps = plan.steps || [];
+    for (let i = 0; i < steps.length; i++) {
+      const step = steps[i];
+      logger.info("SYSTEM", `[Orchestrator] Step ${i + 1}/${steps.length}: ${step.agent}`, {
+        agent: step.agent,
+        taskPreview: step.task.slice(0, 150),
+      });
       onProgress?.({ agent: step.agent, task: step.task, status: "executing" });
 
       // Enrich the task with context from previous steps
@@ -125,6 +146,10 @@ Respond ONLY with valid JSON (no markdown, no extra text):
       // Append this agent's output to the shared context for subsequent steps
       sharedContext += `\n\n[${step.agent}]: ${result}`;
 
+      logger.info("SYSTEM", `[Orchestrator] Step ${i + 1}/${steps.length} complete: ${step.agent}`, {
+        agent: step.agent,
+        resultPreview: result.slice(0, 200),
+      });
       onProgress?.({
         agent: step.agent,
         task: step.task,

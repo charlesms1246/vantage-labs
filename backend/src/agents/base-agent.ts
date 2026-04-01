@@ -1,6 +1,7 @@
 import { getLLM, ModelType } from "../services/llm";
 import { Tool } from "@langchain/core/tools";
 import { HumanMessage, SystemMessage, AIMessage, ToolMessage, BaseMessage } from "@langchain/core/messages";
+import { logger } from "../services/logger";
 
 export interface AgentConfig {
   name: string;
@@ -12,9 +13,23 @@ export interface AgentConfig {
 
 const MAX_TOOL_ITERATIONS = 6;
 
+function truncate(value: unknown, maxChars = 500): unknown {
+  if (typeof value === "string") {
+    return value.length > maxChars
+      ? `${value.slice(0, maxChars)}... [+${value.length - maxChars} chars]`
+      : value;
+  }
+  if (typeof value === "object" && value !== null) {
+    const s = JSON.stringify(value);
+    return s.length > maxChars ? `${s.slice(0, maxChars)}... [+${s.length - maxChars} chars]` : value;
+  }
+  return value;
+}
+
 export abstract class BaseAgent {
   protected name: string;
   protected role: string;
+  protected modelType: string;
   protected llm: ReturnType<typeof getLLM>;
   protected tools: Tool[];
   protected systemPrompt: string;
@@ -23,6 +38,7 @@ export abstract class BaseAgent {
   constructor(agentConfig: AgentConfig) {
     this.name = agentConfig.name;
     this.role = agentConfig.role;
+    this.modelType = agentConfig.model;
     this.tools = agentConfig.tools;
     this.systemPrompt = agentConfig.systemPrompt;
     this.llm = getLLM(agentConfig.model);
@@ -49,6 +65,13 @@ export abstract class BaseAgent {
     }
 
     for (let iter = 0; iter < MAX_TOOL_ITERATIONS; iter++) {
+      const lastHuman = messages.filter(m => m._getType() === "human").at(-1);
+      logger.info("LLM", `[${this.name}] Invoking LLM (iter ${iter + 1})`, {
+        agent: this.name,
+        model: this.modelType,
+        messageCount: messages.length,
+        inputPreview: truncate(lastHuman?.content?.toString() ?? "", 200),
+      });
       const response = await llmWithTools.invoke(messages);
       const content = typeof response.content === "string"
         ? response.content
@@ -59,14 +82,27 @@ export abstract class BaseAgent {
       // Path 1: Native tool_calls (function calling API)
       const toolCalls = (response as AIMessage).tool_calls;
       if (toolCalls && toolCalls.length > 0) {
+        logger.info("LLM", `[${this.name}] LLM response — tool calls`, {
+          agent: this.name,
+          model: this.modelType,
+          toolCallNames: toolCalls.map(tc => tc.name),
+        });
         messages.push(response as AIMessage);
         for (const tc of toolCalls) {
           const tool = this.tools.find(t => t.name === tc.name);
           if (tool) {
             const args = typeof tc.args === "string" ? tc.args : JSON.stringify(tc.args ?? {});
-            console.log(`[${this.name}] Calling tool: ${tc.name} with args: ${args}`);
+            logger.info("TOOL", `[${this.name}] Tool call: ${tc.name}`, {
+              agent: this.name,
+              tool: tc.name,
+              args: truncate(args),
+            });
             const result = await tool.invoke(args);
-            console.log(`[${this.name}] Tool ${tc.name} result: ${result.slice(0, 200)}...`);
+            logger.info("TOOL", `[${this.name}] Tool result: ${tc.name}`, {
+              agent: this.name,
+              tool: tc.name,
+              resultPreview: truncate(result),
+            });
             messages.push(new ToolMessage({ content: result, tool_call_id: tc.id ?? `call_${iter}` }));
           }
         }
@@ -83,9 +119,17 @@ export abstract class BaseAgent {
             const args = typeof parsed.arguments === "string"
               ? parsed.arguments
               : JSON.stringify(parsed.arguments ?? {});
-            console.log(`[${this.name}] Text-based tool call: ${parsed.name}`);
+            logger.info("TOOL", `[${this.name}] Text tool call: ${parsed.name}`, {
+              agent: this.name,
+              tool: parsed.name,
+              args: truncate(args),
+            });
             const toolResult = await tool.invoke(args);
-            console.log(`[${this.name}] Tool ${parsed.name} result: ${toolResult.slice(0, 200)}...`);
+            logger.info("TOOL", `[${this.name}] Text tool result: ${parsed.name}`, {
+              agent: this.name,
+              tool: parsed.name,
+              resultPreview: truncate(toolResult),
+            });
             messages.push(new AIMessage(content));
             messages.push(new HumanMessage(`Tool result for ${parsed.name}:\n${toolResult}\n\nContinue with the task.`));
             continue;
@@ -96,12 +140,18 @@ export abstract class BaseAgent {
       }
 
       // No tool call detected — this is the final response
+      logger.info("LLM", `[${this.name}] LLM final response`, {
+        agent: this.name,
+        model: this.modelType,
+        contentPreview: truncate(content),
+      });
       lastOutput = content;
       break;
     }
 
     // If we exhausted iterations without a final response, ask for a summary
     if (!lastOutput) {
+      logger.warn("LLM", `[${this.name}] Max iterations reached, requesting summary`, { agent: this.name });
       const summaryResponse = await this.llm.invoke([
         ...messages,
         new HumanMessage("Provide a final summary of what was accomplished and the key results."),
