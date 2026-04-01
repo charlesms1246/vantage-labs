@@ -3,7 +3,7 @@ import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { ChatOpenAI } from "@langchain/openai";
 import { config } from "./env";
 
-export function createGroqModel(modelName = "qwen/qwen3-32b") {
+export function createGroqModel(modelName = "llama-3.3-70b-versatile") {
   return new ChatGroq({
     apiKey: config.GROQ_API_KEY,
     model: modelName,
@@ -11,7 +11,7 @@ export function createGroqModel(modelName = "qwen/qwen3-32b") {
   });
 }
 
-export function createGeminiModel(modelName = "gemini-2.5-flash-lite") {
+export function createGeminiModel(modelName = "gemini-2.5-flash") {
   return new ChatGoogleGenerativeAI({
     apiKey: config.GEMINI_API_KEY,
     model: modelName,
@@ -19,13 +19,14 @@ export function createGeminiModel(modelName = "gemini-2.5-flash-lite") {
   });
 }
 
-export function createClaudeModel() {
+// Generic OpenRouter factory — pass any OpenRouter model slug
+export function createOpenRouterModel(modelName: string) {
   return new ChatOpenAI({
     apiKey: config.OPENROUTER_API_KEY,
     configuration: {
       baseURL: "https://openrouter.ai/api/v1",
     },
-    model: "nvidia/nemotron-3-super-120b-a12b:free",
+    model: modelName,
     temperature: 0.1,
   });
 }
