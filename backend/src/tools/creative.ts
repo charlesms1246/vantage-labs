@@ -21,7 +21,8 @@ export class GenerateImageTool extends Tool {
   async _call(input: string): Promise<string> {
     let prompt = input;
     try {
-      prompt = JSON.parse(input).prompt || input;
+      const parsed = parseToolInput(input);
+      prompt = (parsed.prompt as string) || (parsed.input as string) || input;
     } catch {}
 
     logger.info("LLM", "[Yasmin] generate_image: invoking Gemini", { model: "gemini-2.5-flash", promptPreview: prompt.slice(0, 150) });
