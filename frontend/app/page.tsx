@@ -1,16 +1,25 @@
 "use client";
 
 import { usePrivy } from "@privy-io/react-auth";
+import { useEffect } from "react";
 import { ApprovalModal } from "@/components/ApprovalModal";
 import { useSession } from "@/contexts/SessionContext";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import Game from "@/components/Game";
+import { api } from "@/lib/api";
 import { pixelify_sans } from "./fonts";
 
 export default function Home() {
   const { authenticated, ready, user } = usePrivy();
   const { pendingApproval } = useSession();
   useWebSocket();
+
+  // Sync wallet address to REST API client whenever it changes
+  useEffect(() => {
+    if (user?.wallet?.address) {
+      api.setWalletAddress(user.wallet.address);
+    }
+  }, [user?.wallet?.address]);
 
   if (!ready) {
     return (
