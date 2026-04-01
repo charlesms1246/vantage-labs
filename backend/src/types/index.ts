@@ -24,7 +24,7 @@ export interface SessionState {
 export interface AgentConfig {
   name: string;
   role: string;
-  model: "groq" | "gemini" | "claude";
+  model: string;
   systemPrompt: string;
 }
 
