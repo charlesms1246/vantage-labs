@@ -50,13 +50,17 @@ export function Terminal() {
         });
         break;
 
-      case "agent_response":
-        addMessage({
-          type: "agent",
-          agent: data.agent,
-          content: data.content || "",
-        });
+      case "agent_response": {
+        const agentContent = (data.result as string) || data.content || "";
+        if (agentContent) {
+          addMessage({
+            type: "agent",
+            agent: data.agent,
+            content: agentContent,
+          });
+        }
         break;
+      }
 
       case "plan_ready":
         setIsProcessing(false);

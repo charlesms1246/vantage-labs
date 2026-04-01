@@ -48,7 +48,7 @@ export class Character {
             if (!parsed.agent || parsed.agent.toLowerCase() !== this.name.toLowerCase()) {
                 return;
             }
-            const message = parsed.content || parsed.message || '';
+            const message = parsed.result || parsed.content || parsed.message || '';
             if (message.trim()) {
                 this.onMessageReceived(this.index, message);
                 setTimeout(() => this.onMessageReceived(this.index, ''), 8000);

@@ -12,8 +12,16 @@ class SocketManager {
 
   connect(walletAddress: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      if (this.socket?.connected) {
-        resolve();
+      if (this.socket) {
+        // Socket already created — resolve immediately if connected, or wait for it
+        if (this.socket.connected) {
+          resolve();
+        } else {
+          this.socket.once("connect", () => resolve());
+          this.socket.once("connect_error", (err) => {
+            if (!this.reconnecting) reject(err);
+          });
+        }
         return;
       }
 
