@@ -6,7 +6,7 @@ import { flowProvider, getDeployerWallet } from "../config/chains";
 import { logger } from "../services/logger";
 
 // Load pre-compiled Hardhat artifacts — real bytecode for on-chain deployment
-const ARTIFACTS_DIR = path.resolve(__dirname, "../../contracts/artifacts/contracts/templates");
+const ARTIFACTS_DIR = path.resolve(__dirname, "../../../contracts/artifacts/contracts/templates");
 
 function loadArtifact(contractName: string): { abi: ethers.InterfaceAbi; bytecode: string } {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
