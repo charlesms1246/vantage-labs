@@ -23,5 +23,7 @@ export const config = {
 
   LIGHTHOUSE_API_KEY: process.env.LIGHTHOUSE_API_KEY || "",
 
+  IMGBB_API_KEY: process.env.IMGBB_API_KEY || "",
+
   FRONTEND_URL: process.env.FRONTEND_URL || "http://localhost:3000",
 };
