@@ -91,13 +91,14 @@ export abstract class BaseAgent {
         for (const tc of toolCalls) {
           const tool = this.tools.find(t => t.name === tc.name);
           if (tool) {
-            const args = typeof tc.args === "string" ? tc.args : JSON.stringify(tc.args ?? {});
+            // StructuredTool.invoke() expects an object — pass args directly (parse if string)
+            const toolArgs = typeof tc.args === "string" ? JSON.parse(tc.args) : (tc.args ?? {});
             logger.info("TOOL", `[${this.name}] Tool call: ${tc.name}`, {
               agent: this.name,
               tool: tc.name,
-              args: truncate(args),
+              args: truncate(toolArgs),
             });
-            const result = await tool.invoke(args);
+            const result = await tool.invoke(toolArgs);
             logger.info("TOOL", `[${this.name}] Tool result: ${tc.name}`, {
               agent: this.name,
               tool: tc.name,
@@ -116,15 +117,16 @@ export abstract class BaseAgent {
           const parsed = JSON.parse(toolCallMatch[1]);
           const tool = this.tools.find(t => t.name === parsed.name);
           if (tool) {
-            const args = typeof parsed.arguments === "string"
-              ? parsed.arguments
-              : JSON.stringify(parsed.arguments ?? {});
+            // StructuredTool.invoke() expects an object — pass args directly (parse if string)
+            const toolArgs = typeof parsed.arguments === "string"
+              ? JSON.parse(parsed.arguments)
+              : (parsed.arguments ?? {});
             logger.info("TOOL", `[${this.name}] Text tool call: ${parsed.name}`, {
               agent: this.name,
               tool: parsed.name,
-              args: truncate(args),
+              args: truncate(toolArgs),
             });
-            const toolResult = await tool.invoke(args);
+            const toolResult = await tool.invoke(toolArgs);
             logger.info("TOOL", `[${this.name}] Text tool result: ${parsed.name}`, {
               agent: this.name,
               tool: parsed.name,
