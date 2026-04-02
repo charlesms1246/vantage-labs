@@ -1,7 +1,9 @@
 import { Tool } from "@langchain/core/tools";
 import { lighthouseService } from "../services/lighthouse";
+import { uploadToImgbb } from "../services/imgbb";
 import { getLLM } from "../services/llm";
 import { logger } from "../services/logger";
+import { config } from "../config/env";
 
 // LangChain Tool wraps native tool-call args as { input: "<json-string>" }.
 // This helper unwraps that envelope so _call always gets the real params.

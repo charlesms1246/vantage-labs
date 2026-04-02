@@ -21,6 +21,8 @@ export function getLLM(model: ModelType) {
       return createGeminiModel();
     case "gemini-image":
       return createGeminiModel("gemini-2.5-flash");
+    case "gemini-image-gen":
+      return createGeminiImageGenModel();
     case "openrouter-minimax":
       return createOpenRouterModel("minimax/minimax-m2.5:free");
     case "openrouter-stepfun":
