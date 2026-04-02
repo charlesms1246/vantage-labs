@@ -270,9 +270,11 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
                     ? parsed.result
                     : JSON.stringify(parsed.result);
 
-                // Extract a Lighthouse image URL if present (for inline image display)
-                const lighthouseMatch = resultText.match(/https:\/\/gateway\.lighthouse\.storage\/ipfs\/[^\s)">\]]+/);
-                const imageUrl = lighthouseMatch?.[0];
+                // Extract an imgbb or Lighthouse image URL if present (for inline image display)
+                const imageMatch = resultText.match(
+                  /(https:\/\/i\.ibb\.co\/[^\s)">\]]+|https:\/\/gateway\.lighthouse\.storage\/ipfs\/[^\s)">\]]+)/
+                );
+                const imageUrl = imageMatch?.[0];
 
                 setNotifications(prev => [{
                     id: crypto.randomUUID(),
