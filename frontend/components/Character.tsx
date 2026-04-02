@@ -60,14 +60,15 @@ export class Character {
 
         this.loadSprite(spriteSrc, onLoad);
 
-        // Send greeting after random delay
+        Character.allCharacters.push(this);
+
+        // Send greeting after random delay — only if this instance is still active
         const delay = Math.floor(Math.random() * 3000) + 1000;
         setTimeout(() => {
+            if (!Character.allCharacters.includes(this)) return;
             this.onMessageReceived(this.index, `Hello, I'm ${this.name}`);
             setTimeout(() => this.onMessageReceived(this.index, ''), 8000);
         }, delay);
-
-        Character.allCharacters.push(this);
     }
 
     private loadSprite(spriteSrc: string, onLoad: () => void) {
