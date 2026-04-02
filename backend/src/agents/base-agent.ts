@@ -3,6 +3,8 @@ import { StructuredTool } from "@langchain/core/tools";
 import { HumanMessage, SystemMessage, AIMessage, ToolMessage, BaseMessage } from "@langchain/core/messages";
 import { logger } from "../services/logger";
 
+const GROQ_FALLBACK: ModelType = "groq"; // llama-3.3-70b-versatile — used when provider returns 4xx
+
 export interface AgentConfig {
   name: string;
   role: string;
@@ -72,7 +74,25 @@ export abstract class BaseAgent {
         messageCount: messages.length,
         inputPreview: truncate(lastHuman?.content?.toString() ?? "", 200),
       });
-      const response = await llmWithTools.invoke(messages);
+      let response: Awaited<ReturnType<ReturnType<typeof getLLM>["invoke"]>>;
+      try {
+        response = await llmWithTools.invoke(messages);
+      } catch (err) {
+        const msg = String(err);
+        // Provider-level failures (403, 429, 5xx) — retry once with Groq fallback
+        if (/403|429|500|502|503|Provider returned error/i.test(msg) && this.modelType !== GROQ_FALLBACK) {
+          logger.warn("LLM", `[${this.name}] Provider error, falling back to Groq`, {
+            agent: this.name, originalModel: this.modelType, error: msg.slice(0, 200),
+          });
+          const fallbackLlm = getLLM(GROQ_FALLBACK);
+          const fallbackLlmWithTools = this.tools.length > 0
+            ? (fallbackLlm as any).bindTools(this.tools)
+            : fallbackLlm;
+          response = await fallbackLlmWithTools.invoke(messages);
+        } else {
+          throw err;
+        }
+      }
       const content = typeof response.content === "string"
         ? response.content
         : Array.isArray(response.content)
