@@ -1,6 +1,6 @@
 import { StructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, ApiError, type GenerateContentResponse } from "@google/genai";
 import { lighthouseService } from "../services/lighthouse";
 import { uploadToImgbb } from "../services/imgbb";
 import { logger } from "../services/logger";
@@ -21,14 +21,30 @@ export class GenerateImageTool extends StructuredTool {
 
     const ai = new GoogleGenAI({ apiKey: config.GEMINI_API_KEY });
 
-    const response = await ai.models.generateContentStream({
+    const genParams = {
       model: IMAGE_GEN_MODEL,
       config: {
         responseModalities: ["IMAGE", "TEXT"],
         imageConfig: { aspectRatio: "1:1" },
       },
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-    });
+    };
+
+    let response: AsyncGenerator<GenerateContentResponse>;
+    try {
+      response = await ai.models.generateContentStream(genParams);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 429) {
+        // Extract retryDelay from the API error message JSON, e.g. "retryDelay":"29s"
+        const delayMatch = err.message.match(/"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"/);
+        const waitMs = delayMatch ? Math.ceil(parseFloat(delayMatch[1])) * 1000 : 35_000;
+        logger.warn("LLM", `[Yasmin] generate_image: rate limited (429), retrying in ${waitMs / 1000}s`, { model: IMAGE_GEN_MODEL });
+        await new Promise(resolve => setTimeout(resolve, waitMs));
+        response = await ai.models.generateContentStream(genParams);
+      } else {
+        throw err;
+      }
+    }
 
     // Collect base64 image and text description from stream chunks
     let base64: string | undefined;
