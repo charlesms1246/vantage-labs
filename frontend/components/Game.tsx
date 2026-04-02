@@ -22,7 +22,6 @@ import {
 } from '@/utils/properties';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useSession } from '@/contexts/SessionContext';
-import AgentDetails from './AgentDetails';
 import { Character } from './Character';
 import Chat from './Chat';
 import { God } from './God';
@@ -1117,18 +1116,9 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
                 )}
             </div>
 
-            {/* Right Column - Agent Details and Notifications */}
-            <div className="hidden md:block w-80 h-full space-y-4">
-                <div className="h-[28%] overflow-hidden rounded-lg">
-                    <AgentDetails
-                        ens="agent.eth"
-                        chain="Ethereum"
-                        resources={["100 USDC", "2 NFTs", "1 Badge"]}
-                    />
-                </div>
-                <div className="h-[70%] overflow-hidden rounded-lg">
-                    <NotificationBoard notifications={notifications} />
-                </div>
+            {/* Right Column - System Events */}
+            <div className="hidden md:block w-80 h-full overflow-hidden rounded-lg">
+                <NotificationBoard notifications={notifications} />
             </div>
 
             {/* Mobile Chat and Notifications */}
