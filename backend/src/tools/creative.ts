@@ -6,7 +6,7 @@ import { uploadToImgbb } from "../services/imgbb";
 import { logger } from "../services/logger";
 import { config } from "../config/env";
 
-const IMAGE_GEN_MODEL = "gemini-2.0-flash-preview-image-generation";
+const IMAGE_GEN_MODEL = "gemini-2.5-flash-image";
 
 export class GenerateImageTool extends StructuredTool {
   name = "generate_image";
@@ -27,7 +27,7 @@ export class GenerateImageTool extends StructuredTool {
         // @ts-expect-error responseModalities is valid for image generation models
         generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
       },
-      { apiVersion: "v1alpha" }
+      { apiVersion: "v1beta" }
     );
 
     const result = await model.generateContent(prompt);
