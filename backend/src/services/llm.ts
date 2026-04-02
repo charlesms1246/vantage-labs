@@ -1,4 +1,4 @@
-import { createGroqModel, createGeminiModel, createOpenRouterModel } from "../config/models";
+import { createGroqModel, createGeminiModel, createGeminiImageGenModel, createOpenRouterModel } from "../config/models";
 
 export type ModelType =
   | "groq"              // Orchestrator default
