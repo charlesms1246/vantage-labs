@@ -1,6 +1,6 @@
 import { StructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import { lighthouseService } from "../services/lighthouse";
 import { uploadToImgbb } from "../services/imgbb";
 import { logger } from "../services/logger";
@@ -19,27 +19,36 @@ export class GenerateImageTool extends StructuredTool {
   async _call({ prompt }: { prompt: string }): Promise<string> {
     logger.info("LLM", "[Yasmin] generate_image: invoking Gemini image generation", { model: IMAGE_GEN_MODEL, promptPreview: prompt.slice(0, 150) });
 
-    // Use @google/generative-ai directly with v1alpha (required for image generation preview)
-    const genAI = new GoogleGenerativeAI(config.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel(
-      {
-        model: IMAGE_GEN_MODEL,
-        // @ts-expect-error responseModalities is valid for image generation models
-        generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
+    const ai = new GoogleGenAI({ apiKey: config.GEMINI_API_KEY });
+
+    const response = await ai.models.generateContentStream({
+      model: IMAGE_GEN_MODEL,
+      config: {
+        responseModalities: ["IMAGE", "TEXT"],
+        imageConfig: { aspectRatio: "1:1" },
       },
-      { apiVersion: "v1beta" }
-    );
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+    });
 
-    const result = await model.generateContent(prompt);
-    const parts = result.response.candidates?.[0]?.content?.parts ?? [];
+    // Collect base64 image and text description from stream chunks
+    let base64: string | undefined;
+    let mimeType: string | undefined;
+    let description = "";
 
-    // Extract base64 image bytes and text description from response parts
-    const imagePart = parts.find((p) => p.inlineData?.data);
-    const textPart = parts.find((p) => p.text);
-    const base64 = imagePart?.inlineData?.data;
-    const description = textPart?.text ?? "";
+    for await (const chunk of response) {
+      const parts = chunk.candidates?.[0]?.content?.parts ?? [];
+      for (const part of parts) {
+        if (part.inlineData?.data && !base64) {
+          base64 = part.inlineData.data;
+          mimeType = part.inlineData.mimeType;
+        }
+        if (part.text) {
+          description += part.text;
+        }
+      }
+    }
 
-    logger.info("LLM", "[Yasmin] generate_image: Gemini responded", { hasImage: !!base64, descriptionPreview: description.slice(0, 200) });
+    logger.info("LLM", "[Yasmin] generate_image: Gemini responded", { hasImage: !!base64, mimeType, descriptionPreview: description.slice(0, 200) });
 
     // Upload image to imgbb for public hosting (5 min expiry)
     let imgbbUrl: string | undefined;
