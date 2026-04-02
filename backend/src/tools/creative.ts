@@ -1,10 +1,12 @@
 import { StructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { lighthouseService } from "../services/lighthouse";
 import { uploadToImgbb } from "../services/imgbb";
-import { getLLM } from "../services/llm";
 import { logger } from "../services/logger";
 import { config } from "../config/env";
+
+const IMAGE_GEN_MODEL = "gemini-2.0-flash-preview-image-generation";
 
 export class GenerateImageTool extends StructuredTool {
   name = "generate_image";
@@ -14,25 +16,28 @@ export class GenerateImageTool extends StructuredTool {
     prompt: z.string().describe("Detailed description of the image to generate"),
   });
 
-  private gemini = getLLM("gemini-image-gen");
-
   async _call({ prompt }: { prompt: string }): Promise<string> {
-    logger.info("LLM", "[Yasmin] generate_image: invoking Gemini image generation", { model: "gemini-2.0-flash-exp", promptPreview: prompt.slice(0, 150) });
+    logger.info("LLM", "[Yasmin] generate_image: invoking Gemini image generation", { model: IMAGE_GEN_MODEL, promptPreview: prompt.slice(0, 150) });
 
-    const response = await this.gemini.invoke([{ role: "user", content: prompt }]);
+    // Use @google/generative-ai directly with v1alpha (required for image generation preview)
+    const genAI = new GoogleGenerativeAI(config.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel(
+      {
+        model: IMAGE_GEN_MODEL,
+        // @ts-expect-error responseModalities is valid for image generation models
+        generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
+      },
+      { apiVersion: "v1alpha" }
+    );
 
-    // Extract base64 image data from Gemini's multimodal response
-    const parts = Array.isArray(response.content) ? response.content : [];
-    const imagePart = parts.find(
-      (p: unknown) => (p as { type: string }).type === "image_url"
-    ) as { type: string; image_url: { url: string } } | undefined;
+    const result = await model.generateContent(prompt);
+    const parts = result.response.candidates?.[0]?.content?.parts ?? [];
 
-    const base64 = imagePart?.image_url?.url?.replace(/^data:image\/\w+;base64,/, "");
-
-    const textPart = parts.find(
-      (p: unknown) => (p as { type: string }).type === "text"
-    ) as { type: string; text: string } | undefined;
-    const description = textPart?.text ?? (typeof response.content === "string" ? response.content : "");
+    // Extract base64 image bytes and text description from response parts
+    const imagePart = parts.find((p) => p.inlineData?.data);
+    const textPart = parts.find((p) => p.text);
+    const base64 = imagePart?.inlineData?.data;
+    const description = textPart?.text ?? "";
 
     logger.info("LLM", "[Yasmin] generate_image: Gemini responded", { hasImage: !!base64, descriptionPreview: description.slice(0, 200) });
 
@@ -50,7 +55,7 @@ export class GenerateImageTool extends StructuredTool {
 
     // Upload metadata to Lighthouse for on-chain reference
     const cid = await lighthouseService.upload(
-      JSON.stringify({ prompt, description, imgbbUrl, generated_by: "Yasmin via gemini-2.0-flash-exp" })
+      JSON.stringify({ prompt, description, imgbbUrl, generated_by: `Yasmin via ${IMAGE_GEN_MODEL}` })
     );
     logger.info("IPFS", "[Yasmin] generate_image: metadata uploaded to Lighthouse", { cid, imgbbUrl, promptPreview: prompt.slice(0, 100) });
 
