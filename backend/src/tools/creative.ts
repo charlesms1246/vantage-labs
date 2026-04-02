@@ -9,7 +9,14 @@ import { config } from "../config/env";
 // This helper unwraps that envelope so _call always gets the real params.
 function parseToolInput(raw: string): Record<string, unknown> {
   const outer = JSON.parse(raw);
-  if (typeof outer.input === "string") return JSON.parse(outer.input);
+  if (typeof outer.input === "string") {
+    try {
+      return JSON.parse(outer.input);
+    } catch {
+      // outer.input is a plain string, not JSON — keep outer so callers can read outer.input
+      return outer;
+    }
+  }
   return outer;
 }
 
@@ -27,7 +34,7 @@ export class GenerateImageTool extends Tool {
       prompt = (parsed.prompt as string) || (parsed.input as string) || input;
     } catch {}
 
-    logger.info("LLM", "[Yasmin] generate_image: invoking Gemini image generation", { model: "gemini-2.0-flash-preview-image-generation", promptPreview: prompt.slice(0, 150) });
+    logger.info("LLM", "[Yasmin] generate_image: invoking Gemini image generation", { model: "gemini-2.0-flash-exp", promptPreview: prompt.slice(0, 150) });
     const response = await this.gemini.invoke([
       {
         role: "user",
@@ -65,7 +72,7 @@ export class GenerateImageTool extends Tool {
 
     // Upload metadata to Lighthouse for on-chain reference
     const cid = await lighthouseService.upload(
-      JSON.stringify({ prompt, description, imgbbUrl, generated_by: "Yasmin via gemini-2.0-flash-preview-image-generation" })
+      JSON.stringify({ prompt, description, imgbbUrl, generated_by: "Yasmin via gemini-2.0-flash-exp" })
     );
     logger.info("IPFS", "[Yasmin] generate_image: metadata uploaded to Lighthouse", { cid, imgbbUrl, promptPreview: prompt.slice(0, 100) });
 

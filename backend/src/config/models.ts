@@ -22,7 +22,7 @@ export function createGeminiModel(modelName = "gemini-2.5-flash") {
 export function createGeminiImageGenModel() {
   return new ChatGoogleGenerativeAI({
     apiKey: config.GEMINI_API_KEY,
-    model: "gemini-2.0-flash-preview-image-generation",
+    model: "gemini-2.0-flash-exp",
     temperature: 1,
     // @ts-expect-error responseModalities is valid but not yet in the type definitions
     generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
