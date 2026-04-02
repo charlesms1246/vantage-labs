@@ -1,46 +1,25 @@
-import { Tool } from "@langchain/core/tools";
+import { StructuredTool } from "@langchain/core/tools";
+import { z } from "zod";
 import { lighthouseService } from "../services/lighthouse";
 import { uploadToImgbb } from "../services/imgbb";
 import { getLLM } from "../services/llm";
 import { logger } from "../services/logger";
 import { config } from "../config/env";
 
-// LangChain Tool wraps native tool-call args as { input: "<json-string>" }.
-// This helper unwraps that envelope so _call always gets the real params.
-function parseToolInput(raw: string): Record<string, unknown> {
-  const outer = JSON.parse(raw);
-  if (typeof outer.input === "string") {
-    try {
-      return JSON.parse(outer.input);
-    } catch {
-      // outer.input is a plain string, not JSON — keep outer so callers can read outer.input
-      return outer;
-    }
-  }
-  return outer;
-}
-
-export class GenerateImageTool extends Tool {
+export class GenerateImageTool extends StructuredTool {
   name = "generate_image";
   description =
-    "Generate an image using Gemini image generation. Input: JSON with 'prompt' describing the image to generate. Returns the hosted image URL ready for display.";
+    "Generate an image using Gemini. Provide a detailed visual prompt describing what the image should look like.";
+  schema = z.object({
+    prompt: z.string().describe("Detailed description of the image to generate"),
+  });
 
   private gemini = getLLM("gemini-image-gen");
 
-  async _call(input: string): Promise<string> {
-    let prompt = input;
-    try {
-      const parsed = parseToolInput(input);
-      prompt = (parsed.prompt as string) || (parsed.input as string) || input;
-    } catch {}
-
+  async _call({ prompt }: { prompt: string }): Promise<string> {
     logger.info("LLM", "[Yasmin] generate_image: invoking Gemini image generation", { model: "gemini-2.0-flash-exp", promptPreview: prompt.slice(0, 150) });
-    const response = await this.gemini.invoke([
-      {
-        role: "user",
-        content: prompt,
-      },
-    ]);
+
+    const response = await this.gemini.invoke([{ role: "user", content: prompt }]);
 
     // Extract base64 image data from Gemini's multimodal response
     const parts = Array.isArray(response.content) ? response.content : [];
@@ -50,7 +29,6 @@ export class GenerateImageTool extends Tool {
 
     const base64 = imagePart?.image_url?.url?.replace(/^data:image\/\w+;base64,/, "");
 
-    // Extract any text description returned alongside the image
     const textPart = parts.find(
       (p: unknown) => (p as { type: string }).type === "text"
     ) as { type: string; text: string } | undefined;
@@ -89,26 +67,26 @@ export class GenerateImageTool extends Tool {
   }
 }
 
-export class CreateNFTMetadataTool extends Tool {
+export class CreateNFTMetadataTool extends StructuredTool {
   name = "create_nft_metadata";
-  description =
-    "Create NFT metadata JSON. Input: JSON with 'name', 'description', 'imageCID' fields. Returns metadata CID.";
+  description = "Create NFT metadata JSON and upload to Filecoin via Lighthouse. Returns the metadata CID.";
+  schema = z.object({
+    name: z.string().describe("Name of the NFT"),
+    description: z.string().describe("Description of the NFT"),
+    imageCID: z.string().describe("IPFS CID of the NFT image"),
+    attributes: z.array(z.record(z.string(), z.unknown())).optional().describe("Optional NFT attributes array"),
+  });
 
-  async _call(input: string): Promise<string> {
-    let params: Record<string, unknown> = {};
-    try {
-      params = parseToolInput(input);
-    } catch {
-      return JSON.stringify({ error: "Invalid JSON input for create_nft_metadata" });
-    }
-    const name = params.name as string | undefined;
-    const description = params.description as string | undefined;
-    const imageCID = (params.imageCID ?? params.image_cid ?? params.cid) as string | undefined;
-    const attributes = Array.isArray(params.attributes) ? params.attributes : [];
+  async _call({ name, description, imageCID, attributes = [] }: {
+    name: string;
+    description: string;
+    imageCID: string;
+    attributes?: Record<string, unknown>[];
+  }): Promise<string> {
     const metadata = {
       name,
       description,
-      image: imageCID ? `ipfs://${imageCID}` : undefined,
+      image: `ipfs://${imageCID}`,
       attributes,
       created_by: "Yasmin - Vantage Labs",
     };
@@ -118,28 +96,28 @@ export class CreateNFTMetadataTool extends Tool {
   }
 }
 
-export class UploadToFilecoinTool extends Tool {
+export class UploadToFilecoinTool extends StructuredTool {
   name = "upload_to_filecoin";
-  description =
-    "Upload content to Filecoin via Lighthouse. Input: string content or JSON. Returns CID.";
+  description = "Upload arbitrary content to Filecoin via Lighthouse. Returns the CID.";
+  schema = z.object({
+    content: z.string().describe("Content to upload (string or JSON)"),
+  });
 
-  async _call(input: string): Promise<string> {
-    const cid = await lighthouseService.upload(input);
+  async _call({ content }: { content: string }): Promise<string> {
+    const cid = await lighthouseService.upload(content);
     logger.info("IPFS", "[Yasmin] upload_to_filecoin: content uploaded", { cid, url: lighthouseService.getGatewayUrl(cid) });
     return JSON.stringify({ cid, url: lighthouseService.getGatewayUrl(cid) });
   }
 }
 
-export class CreateTweetTool extends Tool {
+export class CreateTweetTool extends StructuredTool {
   name = "create_tweet";
-  description =
-    "Generate a marketing tweet. Input: JSON with 'context' field. Returns tweet text.";
+  description = "Generate a marketing tweet for Vantage Labs.";
+  schema = z.object({
+    context: z.string().describe("Context or topic for the tweet"),
+  });
 
-  async _call(input: string): Promise<string> {
-    let context = input;
-    try {
-      context = JSON.parse(input).context || input;
-    } catch {}
+  async _call({ context }: { context: string }): Promise<string> {
     return JSON.stringify({
       tweet: `🚀 Exciting news from Vantage Labs! ${context} #Web3 #DeFi #Flow #Filecoin #DAA`,
       charCount: 280,
