@@ -1,5 +1,5 @@
 import { getLLM, ModelType } from "../services/llm";
-import { Tool } from "@langchain/core/tools";
+import { StructuredTool } from "@langchain/core/tools";
 import { HumanMessage, SystemMessage, AIMessage, ToolMessage, BaseMessage } from "@langchain/core/messages";
 import { logger } from "../services/logger";
 
@@ -8,7 +8,7 @@ export interface AgentConfig {
   role: string;
   model: ModelType;
   systemPrompt: string;
-  tools: Tool[];
+  tools: StructuredTool[];
 }
 
 const MAX_TOOL_ITERATIONS = 6;
@@ -31,7 +31,7 @@ export abstract class BaseAgent {
   protected role: string;
   protected modelType: string;
   protected llm: ReturnType<typeof getLLM>;
-  protected tools: Tool[];
+  protected tools: StructuredTool[];
   protected systemPrompt: string;
   protected conversationHistory: BaseMessage[] = [];
 
