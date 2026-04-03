@@ -2,6 +2,33 @@ import { truncateAddress } from '@/utils/formatters';
 import Image from 'next/image';
 import React from 'react';
 
+// Renders JSON object as formatted key-value pairs (for orchestrator events)
+function renderJsonMessage(message: string): React.ReactNode {
+    try {
+        const parsed = JSON.parse(message);
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+            return null; // Not a valid object to render
+        }
+
+        return (
+            <div className="space-y-2 text-sm">
+                {Object.entries(parsed).map(([key, value]) => {
+                    const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
+                    const displayValue = typeof value === 'string' ? value : JSON.stringify(value);
+                    return (
+                        <div key={key} className="flex gap-2">
+                            <span className="font-semibold text-foreground/70 min-w-fit">{label}:</span>
+                            <span className="text-foreground break-words flex-1">{displayValue}</span>
+                        </div>
+                    );
+                })}
+            </div>
+        );
+    } catch {
+        return null; // Not JSON, will be handled by linkify
+    }
+}
+
 // Renders plain text with URLs converted to clickable <a> tags and markdown [text](url) links resolved
 function linkify(text: string): React.ReactNode[] {
     const parts: React.ReactNode[] = [];
@@ -13,10 +40,10 @@ function linkify(text: string): React.ReactNode[] {
         if (m.index > last) parts.push(text.slice(last, m.index));
         if (m[1] && m[2]) {
             // markdown link
-            parts.push(<a key={m.index} href={m[2]} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline break-all hover:text-blue-800">{m[1]}</a>);
+            parts.push(<a key={m.index} href={m[2]} target="_blank" rel="noopener noreferrer" className="text-foreground underline break-all hover:opacity-70">{m[1]}</a>);
         } else {
             // bare URL
-            parts.push(<a key={m.index} href={m[3]} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline break-all hover:text-blue-800">{m[3]}</a>);
+            parts.push(<a key={m.index} href={m[3]} target="_blank" rel="noopener noreferrer" className="text-foreground underline break-all hover:opacity-70">{m[3]}</a>);
         }
         last = m.index + m[0].length;
     }
@@ -34,28 +61,7 @@ interface NotificationProps {
 
 const Notification = ({ message, timestamp, characterName, eventName, metadata }: NotificationProps) => {
     const getEventTagClass = (event: string) => {
-        switch (event) {
-            case 'funds_requested':
-                return 'bg-emerald-500 text-white';
-            case 'trade_executed':
-                return 'bg-blue-500 text-white';
-            case 'contract_deployed':
-                return 'bg-purple-500 text-white';
-            case 'wallet_created':
-                return 'bg-amber-500 text-white';
-            case 'uniswap_pool_created':
-                return 'bg-pink-500 text-white';
-            case 'tweet_created':
-                return 'bg-sky-500 text-white';
-            case 'system':
-                return 'bg-gray-500 text-white';
-            case 'image_created':
-                return 'bg-indigo-500 text-white';
-            case 'basename_managed':
-                return 'bg-blue-700 text-white';
-            default:
-                return 'bg-muted text-black';
-        }
+        return 'border border-foreground text-foreground bg-transparent';
     };
 
     const getCharacterNameClass = (name: string) => {
@@ -75,35 +81,11 @@ const Notification = ({ message, timestamp, characterName, eventName, metadata }
     };
 
     const getBackgroundClass = (name: string) => {
-        const lowerName = name.toLowerCase();
-        switch (lowerName) {
-            case 'eric':
-                return 'bg-green-50';
-            case 'harper':
-                return 'bg-purple-50';
-            case 'rishi':
-                return 'bg-amber-50';
-            case 'yasmin':
-                return 'bg-rose-50';
-            default:
-                return 'bg-card';
-        }
+        return 'bg-background';
     };
 
     const getBorderClass = (name: string) => {
-        const lowerName = name.toLowerCase();
-        switch (lowerName) {
-            case 'eric':
-                return 'border-green-100';
-            case 'harper':
-                return 'border-purple-100';
-            case 'rishi':
-                return 'border-amber-100';
-            case 'yasmin':
-                return 'border-rose-100';
-            default:
-                return 'border-gray-100';
-        }
+        return 'border-foreground/20';
     };
 
     const renderMetadataValue = (key: string, value: string) => {
@@ -136,7 +118,7 @@ const Notification = ({ message, timestamp, characterName, eventName, metadata }
     return (
         <div
             className={`relative p-4 mb-2 rounded-lg shadow-sm ${getBackgroundClass(characterName)} ${getBorderClass(characterName)} border-2 ${['contract_deployed', 'uniswap_pool_created', 'nft_created'].includes(eventName || '') ? 'cursor-pointer hover:opacity-90' : ''
-                } text-black`}
+                } text-foreground`}
             onClick={() => {
                 const link = metadata && eventName ? getExternalLink(eventName, metadata) : null;
                 if (link) {
@@ -156,17 +138,25 @@ const Notification = ({ message, timestamp, characterName, eventName, metadata }
                             </span>
                         )}
                     </div>
-                    <span className="text-xs text-black shrink-0">
+                    <span className="text-xs text-foreground/60 shrink-0">
                         {timestamp.toLocaleTimeString()}
                     </span>
                 </div>
 
-                <div className={`text-sm w-full text-black ${eventName === 'system' ? 'font-black' : ''} whitespace-pre-wrap break-words`}>
-                    {linkify(message)}
+                <div className={`text-sm w-full text-foreground ${eventName === 'system' ? 'font-black' : ''}`}>
+                    {(() => {
+                        // Try JSON rendering for orchestrator/system events
+                        if (eventName === 'system' || characterName === 'Orchestrator') {
+                            const jsonRendered = renderJsonMessage(message);
+                            if (jsonRendered) return jsonRendered;
+                        }
+                        // Fall back to linkify
+                        return <div className="whitespace-pre-wrap break-words">{linkify(message)}</div>;
+                    })()}
                 </div>
 
                 {metadata && (
-                    <div className="mt-1 p-2 rounded-md bg-muted/50 text-xs font-mono w-full text-black">
+                    <div className="mt-1 p-2 rounded-md bg-background border border-foreground/20 text-xs font-mono w-full text-foreground">
                         {eventName === "image_created" && metadata.url && (
                             <Image
                                 src={metadata.url}
@@ -215,10 +205,10 @@ const Notification = ({ message, timestamp, characterName, eventName, metadata }
                         <div className="grid grid-cols-1 gap-1">
                             {Object.entries(metadata).map(([key, value]) => (
                                 <div key={key} className="flex items-center gap-2">
-                                    <span className="text-black font-medium capitalize shrink-0">
+                                    <span className="text-foreground font-medium capitalize shrink-0">
                                         {key.replace(/([A-Z])/g, ' $1').toLowerCase()}:
                                     </span>
-                                    <span className="text-black truncate">
+                                    <span className="text-foreground truncate">
                                         {renderMetadataValue(key, value)}
                                     </span>
                                 </div>

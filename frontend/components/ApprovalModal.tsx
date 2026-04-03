@@ -33,7 +33,7 @@ export function ApprovalModal() {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div data-testid="approval-modal" className="bg-card rounded-xl max-w-lg w-full border border-border">
+      <div data-testid="approval-modal" className="bg-card rounded-2xl max-w-lg w-full border border-border">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border">
           <div className="flex items-center gap-2">

@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
-import { inter, pixelify_sans } from "./fonts";
+import { pixelify_sans } from "./fonts";
 import "./globals.css";
 import { Providers } from "./providers";
-import Image from "next/image";
-import PrivyAuthButton from "@/components/PrivyAuthButton";
+import { ThemeProvider } from "@/contexts/ThemeContext";
 
 export const metadata: Metadata = {
   title: "Vantage Labs - Decentralized Autonomous Agency",
@@ -24,27 +23,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="overflow-hidden">
-      <body className={`${inter.className} overflow-hidden`}>
-        <div className="absolute inset-0 -z-10">
-          <div className="absolute inset-0 h-full w-full bg-[#EAEBED] bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:14px_24px]" />
-        </div>
+      <body className={`${pixelify_sans.className} overflow-hidden`}>
         <Providers>
-          <div className="mx-auto max-w-[1280px] h-screen overflow-hidden">
-            <div className="flex items-center p-4">
-              <div className="flex-1">
-                <PrivyAuthButton />
-              </div>
-              <Image
-                src="/vantage_logo_transparent.png"
-                alt="Vantage Labs Logo"
-                width={180}
-                height={40}
-                priority
-              />
-              <div className="flex-1" />
-            </div>
+          <ThemeProvider>
             {children}
-          </div>
+          </ThemeProvider>
         </Providers>
       </body>
     </html>

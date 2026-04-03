@@ -18,15 +18,22 @@ import {
     PLAYER_MOVE_SPEED,
     SCALE_FACTOR,
     SPRITE_SIZE,
-    WALKABLE_AREAS
+    WALKABLE_POLYGONS
 } from '@/utils/properties';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { usePrivy } from '@privy-io/react-auth';
 import { useSession } from '@/contexts/SessionContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { Character } from './Character';
 import Chat from './Chat';
+import { ChatEventsPanel } from './ChatEventsPanel';
+import { GameContainer } from './GameContainer';
 import { God } from './God';
 import NotificationBoard from './NotificationBoard';
-import RecursiveChat from './RecursiveChat';
+import { Logo } from './Logo';
+import { ThemeToggle } from './ThemeToggle';
+import { WalletAddress } from './WalletAddress';
+import PrivyAuthButton from './PrivyAuthButton';
 
 // Function to get a random integer between min and max
 function getRandomInt(min: number, max: number) {
@@ -72,6 +79,18 @@ function isOverlapping(
     const minDistanceY = (bounds1.height + bounds2.height) / 2;
 
     return dx < minDistanceX && dy < minDistanceY;
+}
+
+// Helper function to check if a point is inside a polygon using ray casting algorithm
+function isPointInPolygon(px: number, py: number, polygon: { x: number; y: number }[]): boolean {
+    let inside = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        const xi = polygon[i].x, yi = polygon[i].y;
+        const xj = polygon[j].x, yj = polygon[j].y;
+        const intersect = (yi > py) !== (yj > py) && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi;
+        if (intersect) inside = !inside;
+    }
+    return inside;
 }
 
 // Function to check if a character would collide with others at the given position
@@ -132,6 +151,12 @@ function isWithinCanvasBounds(x: number, y: number): boolean {
 }
 
 const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string }) => {
+    const { theme } = useTheme();
+    const { authenticated } = usePrivy();
+    const mapSrc = theme === 'dark'
+        ? '/maps/nyc_trading_floor_night.png'
+        : '/maps/nyc_trading_floor_day.png';
+
     // Refs
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const mapRef = useRef<HTMLImageElement | null>(null);
@@ -146,7 +171,6 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
     const [isInputActive, setIsInputActive] = useState<boolean>(false);
     const [isHoveredIndex, setIsHoveredIndex] = useState<number | null>(null);
     const [inputValue, setInputValue] = useState<string>('');
-    const [chatMode, setChatMode] = useState<'STANDARD' | 'RECURSIVE'>('RECURSIVE');
     const [notifications, setNotifications] = useState<any[]>([]);
     const [chatMessages, setChatMessages] = useState<{
         id: string;
@@ -270,11 +294,19 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
                     ? parsed.result
                     : JSON.stringify(parsed.result);
 
-                // Extract an imgbb or Lighthouse image URL if present (for inline image display)
-                const imageMatch = resultText.match(
-                  /(https:\/\/i\.ibb\.co\/[^\s)">\]]+|https:\/\/gateway\.lighthouse\.storage\/ipfs\/[^\s)">\]]+)/
-                );
-                const imageUrl = imageMatch?.[0];
+                // Extract an imgbb or Lighthouse image URL if present (for inline image display).
+                // Try JSON parse first so we get the URL even when the LLM doesn't repeat it verbatim.
+                const IMAGE_URL_RE = /(https:\/\/i\.ibb\.co\/[^\s)">\]]+|https:\/\/gateway\.lighthouse\.storage\/ipfs\/[^\s)">\]]+)/;
+                let imageUrl: string | undefined;
+                try {
+                    const parsed_result = JSON.parse(resultText);
+                    imageUrl = parsed_result?.url ?? parsed_result?.imgbbUrl ?? parsed_result?.lighthouseUrl;
+                    // Validate it looks like an image host URL
+                    if (imageUrl && !IMAGE_URL_RE.test(imageUrl)) imageUrl = undefined;
+                } catch { /* not JSON — fall back to regex scan */ }
+                if (!imageUrl) {
+                    imageUrl = IMAGE_URL_RE.exec(resultText)?.[0];
+                }
 
                 setNotifications(prev => [{
                     id: crypto.randomUUID(),
@@ -374,13 +406,15 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
         if (DEBUG_WALKABLE_AREAS) {
             ctx.strokeStyle = 'red';
             ctx.lineWidth = 2;
-            WALKABLE_AREAS.forEach((area) => {
-                ctx.strokeRect(
-                    area.x * SCALE_FACTOR + MAP_OFFSET_X,
-                    area.y * SCALE_FACTOR + MAP_OFFSET_Y,
-                    area.width * SCALE_FACTOR,
-                    area.height * SCALE_FACTOR
-                );
+            Object.values(WALKABLE_POLYGONS).forEach(polygon => {
+                ctx.beginPath();
+                polygon.forEach((pt, i) => {
+                    const sx = pt.x * SCALE_FACTOR + MAP_OFFSET_X;
+                    const sy = pt.y * SCALE_FACTOR + MAP_OFFSET_Y;
+                    i === 0 ? ctx.moveTo(sx, sy) : ctx.lineTo(sx, sy);
+                });
+                ctx.closePath();
+                ctx.stroke();
             });
         }
 
@@ -569,69 +603,34 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
                     sessionId,
                     userId,
                     walletAddress,
-                    chatMode
+                    'RECURSIVE'
                 );
             }
 
-            // Initialize player states
-            const initialPlayerStates: PlayerState[] = [
-                {
-                    x: 200,
-                    y: 600,
-                    direction: 'down',
-                    isMoving: false,
-                    message: null,
-                    ai: {
-                        action: 'paused',
-                        actionEndTime:
-                            Date.now() +
-                            getRandomInt(AI_PAUSE_DURATION_MIN, AI_PAUSE_DURATION_MAX),
-                    },
-                },
-                {
-                    x: 400,
-                    y: 600,
-                    direction: 'down',
-                    isMoving: false,
-                    message: null,
-                    ai: {
-                        action: 'paused',
-                        actionEndTime:
-                            Date.now() +
-                            getRandomInt(AI_PAUSE_DURATION_MIN, AI_PAUSE_DURATION_MAX),
-                    },
-                },
-                {
-                    x: 600,
-                    y: 600,
-                    direction: 'down',
-                    isMoving: false,
-                    message: null,
-                    ai: {
-                        action: 'paused',
-                        actionEndTime:
-                            Date.now() +
-                            getRandomInt(AI_PAUSE_DURATION_MIN, AI_PAUSE_DURATION_MAX),
-                    },
-                },
-                {
-                    x: 800,
-                    y: 600,
-                    direction: 'down',
-                    isMoving: false,
-                    message: null,
-                    ai: {
-                        action: 'paused',
-                        actionEndTime:
-                            Date.now() +
-                            getRandomInt(AI_PAUSE_DURATION_MIN, AI_PAUSE_DURATION_MAX),
-                    },
-                }
+            // Initialize player states — spawn positions match the NYC trading floor map
+            const spawnPositions = [
+                { x: 2000, y: 1000 }, // Eric   — right trading zone
+                { x: 700,  y: 600  }, // Harper — top office zone
+                { x: 700,  y: 1300 }, // Rishi  — bottom-left desks
+                { x: 1000, y: 900  }, // Yasmin — center floor
             ];
+            const initialPlayerStates: PlayerState[] = spawnPositions.map((pos) => ({
+                x: pos.x,
+                y: pos.y,
+                direction: 'down' as const,
+                isMoving: false,
+                message: null,
+                ai: {
+                    action: 'paused' as const,
+                    actionEndTime:
+                        Date.now() +
+                        getRandomInt(AI_PAUSE_DURATION_MIN, AI_PAUSE_DURATION_MAX),
+                },
+            }));
 
             // Load the map image
             const mapImage = new Image();
-            mapImage.src = '/industry_office_map.png';
+            mapImage.src = mapSrc;
             await new Promise((resolve, reject) => {
                 mapImage.onload = () => {
                     resolve(null);
@@ -666,13 +665,16 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
                 godRef.current = null;
             }
         };
-    }, [sessionId, userId, walletAddress, chatMode]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sessionId, userId, walletAddress]);
 
+    // Reload map image when theme changes
     useEffect(() => {
-        if (godRef.current) {
-            godRef.current.setChatMode(chatMode);
-        }
-    }, [chatMode]);
+        if (!isInitialized) return;
+        const mapImage = new Image();
+        mapImage.src = mapSrc;
+        mapImage.onload = () => { mapRef.current = mapImage; };
+    }, [mapSrc, isInitialized]);
 
     // Initialize AI states for uncontrolled characters
     useEffect(() => {
@@ -1000,7 +1002,7 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
                     message: inputValue,
                     timestamp: new Date(),
                     characterName: 'You',
-                    chatMode: chatMode,
+                    chatMode: 'RECURSIVE',
                     metadata: null,
                 }, ...prev].slice(0, 50));
 
@@ -1024,12 +1026,8 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
         const scaledX = (x - MAP_OFFSET_X) / SCALE_FACTOR;
         const scaledY = (y - MAP_OFFSET_Y) / SCALE_FACTOR;
 
-        return WALKABLE_AREAS.some(
-            (area) =>
-                scaledX >= area.x &&
-                scaledX < area.x + area.width &&
-                scaledY >= area.y &&
-                scaledY < area.y + area.height
+        return Object.values(WALKABLE_POLYGONS).some(polygon =>
+            isPointInPolygon(scaledX, scaledY, polygon)
         );
     }, []);
 
@@ -1065,72 +1063,76 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
 
     // Return statement with conditional rendering
     return (
-        <div className="relative flex flex-col md:flex-row gap-4 h-[calc(100vh-5rem)] max-h-[calc(100vh-7rem)]">
-            {/* Left Column - RecursiveChat and Chat */}
-            <div className="hidden md:flex md:flex-col w-80 h-full gap-4">
-                <div className="h-auto">
-                    <RecursiveChat chatMode={chatMode} setChatMode={setChatMode} />
+        <div className="flex gap-4 h-full p-4 overflow-hidden">
+            {/* Left column */}
+            <div className="flex flex-col flex-1 gap-3 min-w-0 min-h-0">
+                {/* Left column header */}
+                <div className="flex items-center justify-between shrink-0">
+                    <WalletAddress />
+                    <ThemeToggle />
                 </div>
-                <div className="flex-1 overflow-hidden rounded-lg">
-                    <Chat
-                        messages={chatMessages}
-                        onSendMessage={handleGlobalMessage}
-                        disabled={!isInitialized}
-                    />
+                {/* Logo */}
+                <div className="shrink-0">
+                    <Logo />
                 </div>
-            </div>
-
-            {/* Middle Column - Game Canvas */}
-            <div className="relative flex-1 order-first md:order-none h-full flex items-center justify-center overflow-hidden rounded-lg">
-                {!isInitialized ? (
-                    <div>Loading...</div>
-                ) : (
-                    <>
-                        <canvas
-                            ref={canvasRef}
-                            width={CANVAS_WIDTH}
-                            height={CANVAS_HEIGHT}
-                            onMouseMove={handleMouseMove}
-                            onClick={handleClick}
-                            className="max-w-full max-h-full object-fill"
-                            style={{
-                                width: 'auto',
-                                height: '100%'
-                            }}
-                        />
-                        {isInputActive && controlledPlayerState && (
-                            <input
-                                type="text"
-                                value={inputValue}
-                                onChange={(e) => setInputValue(e.target.value)}
-                                onKeyDown={handleInputKeyDown}
-                                style={{
-                                    position: 'absolute',
-                                    left: `${controlledCharacterX + characterWidth / 2}px`,
-                                    top: `${controlledCharacterY - 30}px`,
-                                    transform: 'translateX(-50%)',
-                                    zIndex: 10,
-                                }}
-                                autoFocus
-                            />
+                {/* Canvas */}
+                <div className="flex-1 min-h-0 relative flex items-center justify-center">
+                    <GameContainer>
+                        {!isInitialized ? (
+                            <div className="flex items-center justify-center w-64 h-48 text-sm opacity-60">
+                                Loading…
+                            </div>
+                        ) : (
+                            <>
+                                <canvas
+                                    ref={canvasRef}
+                                    width={CANVAS_WIDTH}
+                                    height={CANVAS_HEIGHT}
+                                    onMouseMove={handleMouseMove}
+                                    onClick={handleClick}
+                                    className="w-full h-full"
+                                    style={{ display: 'block' }}
+                                />
+                                {isInputActive && controlledPlayerState && (
+                                    <input
+                                        type="text"
+                                        value={inputValue}
+                                        onChange={(e) => setInputValue(e.target.value)}
+                                        onKeyDown={handleInputKeyDown}
+                                        style={{
+                                            position: 'absolute',
+                                            left: `${controlledCharacterX + characterWidth / 2}px`,
+                                            top: `${controlledCharacterY - 30}px`,
+                                            transform: 'translateX(-50%)',
+                                            zIndex: 10,
+                                        }}
+                                        autoFocus
+                                    />
+                                )}
+                            </>
                         )}
-                    </>
-                )}
+                    </GameContainer>
+                </div>
             </div>
 
-            {/* Right Column - System Events */}
-            <div className="hidden md:block w-80 h-full overflow-hidden rounded-lg">
-                <NotificationBoard notifications={notifications} />
-            </div>
-
-            {/* Mobile Chat and Notifications */}
-            <div className="md:hidden fixed bottom-4 left-4 right-4 flex gap-2">
-                <Chat
-                    messages={chatMessages}
-                    onSendMessage={handleGlobalMessage}
-                    disabled={!isInitialized}
+            {/* Right column */}
+            <div className="w-96 shrink-0 h-full">
+                <ChatEventsPanel
+                    chatContent={
+                        authenticated ? (
+                            <Chat
+                                messages={chatMessages}
+                                onSendMessage={handleGlobalMessage}
+                                disabled={!isInitialized}
+                            />
+                        ) : (
+                            <div className="h-full flex items-center justify-center">
+                                <PrivyAuthButton />
+                            </div>
+                        )
+                    }
+                    eventsContent={<NotificationBoard notifications={notifications} />}
                 />
-                <NotificationBoard notifications={notifications} />
             </div>
         </div>
     );

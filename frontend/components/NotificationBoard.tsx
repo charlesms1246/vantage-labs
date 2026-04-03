@@ -8,9 +8,6 @@ interface NotificationBoardProps {
 const NotificationBoard = ({ notifications }: NotificationBoardProps) => {
     return (
         <div className="w-full h-full max-h-screen flex flex-col bg-card p-4 overflow-hidden border-l rounded-lg">
-            <h2 className={`font-semibold tracking-tight text-2xl text-blue-900 mb-4 ${pixelify_sans.className}`}>
-                System Events
-            </h2>
             <div className="flex-1 overflow-y-auto">
                 <div className="space-y-2">
                     {notifications?.map((notification) => {

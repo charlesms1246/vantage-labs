@@ -179,6 +179,13 @@ export class Character {
         }
         lines.push(currentLine);
 
+        // Truncate to maximum 3 lines
+        const MAX_LINES = 3;
+        if (lines.length > MAX_LINES) {
+            lines.length = MAX_LINES;
+            lines[MAX_LINES - 1] += ' ....';
+        }
+
         // Calculate bubble dimensions
         const bubbleWidth = Math.min(
             maxWidth,
