@@ -111,6 +111,14 @@ export function useMarkdown(text: string): React.ReactNode {
                             {children}
                         </td>
                     ),
+                    img: ({ src, alt }) => (
+                        <img
+                            src={src}
+                            alt={alt ?? ""}
+                            className="max-w-full rounded-lg mt-2"
+                            style={{ maxHeight: "400px", objectFit: "contain" }}
+                        />
+                    ),
                 }}
             >
                 {cleaned}

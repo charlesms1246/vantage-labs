@@ -21,11 +21,11 @@ function renderJsonObject(obj: Record<string, unknown>, baseKey = ''): React.Rea
                 const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
                 const strVal = typeof val === 'string' ? val : Array.isArray(val) ? val.join(', ') : String(val);
                 const isUrl = typeof val === 'string' && /^https?:\/\//.test(val);
-                const isImgbb = isUrl && /i\.ibb\.co/.test(val);
+                const isImageUrl = isUrl && (/i\.ibb\.co/.test(val) || /picsum\.photos/.test(val));
                 return (
                     <div key={`${baseKey}-${key}`} className="flex flex-col gap-0.5">
                         <span className="font-semibold text-foreground/70 capitalize">{label}</span>
-                        {isImgbb ? (
+                        {isImageUrl ? (
                             <div>
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img src={strVal} alt={label} className="rounded max-w-[200px] max-h-[200px] object-cover my-1" />

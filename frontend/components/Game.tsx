@@ -1,6 +1,7 @@
 "use client";
 
 import {
+    AGENT_ZONE_KEYS,
     AI_MOVE_DURATION_MAX,
     AI_MOVE_DURATION_MIN,
     AI_MOVE_SPEED,
@@ -17,6 +18,7 @@ import {
     MAP_OFFSET_Y,
     PLAYER_MOVE_SPEED,
     SCALE_FACTOR,
+    SPRITE_DISPLAY_SIZE,
     SPRITE_SIZE,
     WALKABLE_POLYGONS
 } from '@/utils/properties';
@@ -100,13 +102,13 @@ function checkCharacterCollision(
     newX: number,
     newY: number
 ): boolean {
-    // Increase collision box to 95% of character size (up from 90%)
-    const width = SPRITE_SIZE * SCALE_FACTOR * 0.95;
-    const height = SPRITE_SIZE * SCALE_FACTOR * 0.95;
+    // Collision box at 95% of character display size
+    const width = SPRITE_DISPLAY_SIZE * 0.95;
+    const height = SPRITE_DISPLAY_SIZE * 0.95;
 
     const newBounds = {
-        x: newX * SCALE_FACTOR + MAP_OFFSET_X,
-        y: newY * SCALE_FACTOR + MAP_OFFSET_Y,
+        x: newX,
+        y: newY,
         width,
         height,
     };
@@ -116,13 +118,12 @@ function checkCharacterCollision(
         if (!state) return false;
 
         const otherBounds = {
-            x: state.x * SCALE_FACTOR + MAP_OFFSET_X,
-            y: state.y * SCALE_FACTOR + MAP_OFFSET_Y,
+            x: state.x,
+            y: state.y,
             width,
             height,
         };
 
-        // Increase buffer zone from 5 to 8 pixels
         const buffer = 8;
         const expandedBounds = {
             x: otherBounds.x - buffer,
@@ -135,18 +136,13 @@ function checkCharacterCollision(
     });
 }
 
-// Update the isWithinCanvasBounds function
+// Check if a character sprite is within canvas bounds (using raw map coordinates)
 function isWithinCanvasBounds(x: number, y: number): boolean {
-    const scaledX = x * SCALE_FACTOR + MAP_OFFSET_X;
-    const scaledY = y * SCALE_FACTOR + MAP_OFFSET_Y;
-    const characterSize = SPRITE_SIZE * SCALE_FACTOR;
-    const buffer = 50; // 50px buffer from edges
-
     return (
-        scaledX >= buffer &&
-        scaledX + characterSize <= CANVAS_WIDTH - buffer &&
-        scaledY >= buffer &&
-        scaledY + characterSize <= CANVAS_HEIGHT - buffer
+        x >= 0 &&
+        x + SPRITE_DISPLAY_SIZE <= CANVAS_WIDTH &&
+        y >= 0 &&
+        y + SPRITE_DISPLAY_SIZE <= CANVAS_HEIGHT
     );
 }
 
@@ -272,6 +268,56 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
         try {
             const parsed = JSON.parse(message);
 
+            // agent_response with tool_use status → add tool call to chat
+            if (parsed.type === "agent_response" && parsed.status === "tool_use") {
+                const agentName = parsed.agent ?? "Agent";
+                const toolName: string = parsed.toolName ?? "unknown_tool";
+                const toolResult: string = typeof parsed.toolResult === "string"
+                    ? parsed.toolResult
+                    : JSON.stringify(parsed.toolResult ?? "");
+
+                // For Yasmin's image tool, embed the image as markdown
+                let messageText = "";
+                if (agentName.toLowerCase() === "yasmin" && toolName === "generate_image") {
+                    let imageUrl: string | undefined;
+                    try {
+                        const r = JSON.parse(toolResult);
+                        imageUrl = r?.url ?? r?.imgbbUrl ?? r?.lighthouseUrl;
+                    } catch {
+                        /* ignore */
+                    }
+                    const imageUrlRe = /(https:\/\/i\.ibb\.co\/[^\s)">\]]+|https:\/\/gateway\.lighthouse\.storage\/ipfs\/[^\s)">\]]+|https:\/\/picsum\.photos\/[^\s)">\]]+)/;
+                    if (!imageUrl) imageUrl = imageUrlRe.exec(toolResult)?.[0];
+                    const desc = (() => {
+                        try {
+                            return JSON.parse(toolResult)?.description ?? "";
+                        } catch {
+                            return "";
+                        }
+                    })();
+                    messageText = imageUrl
+                        ? `🎨 **generate_image**\n\n![Generated Image](${imageUrl})${desc ? `\n\n${desc}` : ""}`
+                        : `🎨 **generate_image**\n\n${toolResult.slice(0, 300)}`;
+                } else {
+                    // Generic tool result: show name + truncated result
+                    const preview = toolResult.length > 300 ? toolResult.slice(0, 300) + "…" : toolResult;
+                    messageText = `🔧 **${toolName}**\n\n${preview}`;
+                }
+
+                setChatMessages((prev) =>
+                    [
+                        ...prev,
+                        {
+                            id: crypto.randomUUID(),
+                            message: messageText,
+                            timestamp: new Date(),
+                            characterName: agentName,
+                        },
+                    ].slice(-50)
+                );
+                return;
+            }
+
             // agent_response "executing" → show which agent started its task
             if (parsed.type === "agent_response" && parsed.status === "executing") {
                 const agentName = parsed.agent ?? "Agent";
@@ -294,9 +340,9 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
                     ? parsed.result
                     : JSON.stringify(parsed.result);
 
-                // Extract an imgbb or Lighthouse image URL if present (for inline image display).
+                // Extract an imgbb, Lighthouse, or picsum image URL if present (for inline image display).
                 // Try JSON parse first so we get the URL even when the LLM doesn't repeat it verbatim.
-                const IMAGE_URL_RE = /(https:\/\/i\.ibb\.co\/[^\s)">\]]+|https:\/\/gateway\.lighthouse\.storage\/ipfs\/[^\s)">\]]+)/;
+                const IMAGE_URL_RE = /(https:\/\/i\.ibb\.co\/[^\s)">\]]+|https:\/\/gateway\.lighthouse\.storage\/ipfs\/[^\s)">\]]+|https:\/\/picsum\.photos\/[^\s)">\]]+)/;
                 let imageUrl: string | undefined;
                 try {
                     const parsed_result = JSON.parse(resultText);
@@ -409,8 +455,8 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
             Object.values(WALKABLE_POLYGONS).forEach(polygon => {
                 ctx.beginPath();
                 polygon.forEach((pt, i) => {
-                    const sx = pt.x * SCALE_FACTOR + MAP_OFFSET_X;
-                    const sy = pt.y * SCALE_FACTOR + MAP_OFFSET_Y;
+                    const sx = pt.x;
+                    const sy = pt.y;
                     i === 0 ? ctx.moveTo(sx, sy) : ctx.lineTo(sx, sy);
                 });
                 ctx.closePath();
@@ -436,10 +482,10 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
                 playerState.message
             );
 
-            const characterX = playerState.x * SCALE_FACTOR + MAP_OFFSET_X;
-            const characterY = playerState.y * SCALE_FACTOR + MAP_OFFSET_Y;
-            const characterWidth = SPRITE_SIZE * SCALE_FACTOR;
-            const characterHeight = SPRITE_SIZE * SCALE_FACTOR;
+            const characterX = playerState.x;
+            const characterY = playerState.y;
+            const characterWidth = SPRITE_DISPLAY_SIZE;
+            const characterHeight = SPRITE_DISPLAY_SIZE;
 
             // Draw the name above the character if hovered
             if (isHoveredIndex === index && !isInputActive) {
@@ -608,12 +654,14 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
             }
 
             // Initialize player states — spawn positions match the NYC trading floor map
+            // Positions are sprite top-left; foot (bottom-center) anchor is used for walkability
             const spawnPositions = [
-                { x: 2000, y: 1000 }, // Eric   — right trading zone
-                { x: 700,  y: 600  }, // Harper — top office zone
-                { x: 700,  y: 1300 }, // Rishi  — bottom-left desks
-                { x: 1000, y: 900  }, // Yasmin — center floor
+                { x: 1863, y: 1372 }, // Eric 1863,1372
+                { x: 1796, y: 783 }, // Harper 1796,783
+                { x: 1455, y: 1246 }, // Rishi 1455,1246
+                { x: 710, y: 755 }, // Yasmin 710,755
             ];
+
             const initialPlayerStates: PlayerState[] = spawnPositions.map((pos) => ({
                 x: pos.x,
                 y: pos.y,
@@ -763,13 +811,13 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
                                 break;
                         }
 
-                        const scaledNewX = newX * SCALE_FACTOR + MAP_OFFSET_X;
-                        const scaledNewY = newY * SCALE_FACTOR + MAP_OFFSET_Y;
-
                         // Check both canvas bounds, walkable area, and character collisions
+                        // Use bottom-center of sprite (foot anchor) for walkability check
+                        const footX = newX + SPRITE_DISPLAY_SIZE / 2;
+                        const footY = newY + SPRITE_DISPLAY_SIZE;
                         if (
                             isWithinCanvasBounds(newX, newY) &&
-                            isWalkable(scaledNewX, scaledNewY) &&
+                            isWalkable(footX, footY, index) &&
                             !checkCharacterCollision(newPlayerStates, index, newX, newY)
                         ) {
                             playerState.x = newX;
@@ -856,13 +904,13 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
                         return prevStates;
                 }
 
-                const scaledNewX = newX * SCALE_FACTOR + MAP_OFFSET_X;
-                const scaledNewY = newY * SCALE_FACTOR + MAP_OFFSET_Y;
-
                 // Check both canvas bounds, walkable area, and character collisions
+                // Use bottom-center of sprite (foot anchor) for walkability check
+                const footX = newX + SPRITE_DISPLAY_SIZE / 2;
+                const footY = newY + SPRITE_DISPLAY_SIZE;
                 if (
                     isWithinCanvasBounds(newX, newY) &&
-                    isWalkable(scaledNewX, scaledNewY) &&
+                    isWalkable(footX, footY) &&
                     !checkCharacterCollision(newStates, controlledCharacterIndex, newX, newY)
                 ) {
                     playerState.x = newX;
@@ -1021,13 +1069,16 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
     };
 
     // Function to check if a position is walkable
-    const isWalkable = useCallback((x: number, y: number): boolean => {
-        // Adjust the check based on the scaled map
-        const scaledX = (x - MAP_OFFSET_X) / SCALE_FACTOR;
-        const scaledY = (y - MAP_OFFSET_Y) / SCALE_FACTOR;
-
+    const isWalkable = useCallback((x: number, y: number, agentIndex?: number): boolean => {
+        if (agentIndex !== undefined) {
+            // AI agent: constrain to its own zone
+            const key = AGENT_ZONE_KEYS[agentIndex];
+            const polygon = key ? WALKABLE_POLYGONS[key] : null;
+            return polygon ? isPointInPolygon(x, y, polygon) : false;
+        }
+        // Player-controlled: can roam all zones
         return Object.values(WALKABLE_POLYGONS).some(polygon =>
-            isPointInPolygon(scaledX, scaledY, polygon)
+            isPointInPolygon(x, y, polygon)
         );
     }, []);
 
@@ -1035,12 +1086,12 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
     const controlledPlayerState =
         controlledCharacterIndex !== null ? playerStates[controlledCharacterIndex] : null;
     const controlledCharacterX = controlledPlayerState
-        ? controlledPlayerState.x * SCALE_FACTOR + MAP_OFFSET_X
+        ? controlledPlayerState.x
         : 0;
     const controlledCharacterY = controlledPlayerState
-        ? controlledPlayerState.y * SCALE_FACTOR + MAP_OFFSET_Y
+        ? controlledPlayerState.y
         : 0;
-    const characterWidth = SPRITE_SIZE * SCALE_FACTOR;
+    const characterWidth = SPRITE_DISPLAY_SIZE;
 
     // Function to send a message to all characters
     const handleGlobalMessage = (message: string) => {

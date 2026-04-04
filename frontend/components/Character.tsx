@@ -1,7 +1,7 @@
 "use client"
 
 import { socketManager } from "@/lib/socket";
-import { CHARACTER_SCALE, DIRECTION_ORDER, MAP_OFFSET_X, MAP_OFFSET_Y, SCALE_FACTOR, SPRITE_SIZE } from "@/utils/properties";
+import { CHARACTER_SCALE, DIRECTION_ORDER, MAP_OFFSET_X, MAP_OFFSET_Y, SCALE_FACTOR, SPRITE_DISPLAY_SIZE, SPRITE_SIZE } from "@/utils/properties";
 
 interface CharacterBounds {
     x: number;
@@ -46,6 +46,10 @@ export class Character {
         this.messageHandler = (data: unknown) => {
             const parsed = data as any;
             if (!parsed.agent || parsed.agent.toLowerCase() !== this.name.toLowerCase()) {
+                return;
+            }
+            // Skip tool_use events — they're handled by Game.tsx handleGodMessage
+            if (parsed.status === 'tool_use') {
                 return;
             }
             const message = parsed.result || parsed.content || parsed.message || '';
@@ -102,27 +106,22 @@ export class Character {
         const sourceX = directionIndex * SPRITE_SIZE;
         const sourceY = isMoving ? animationFrame * SPRITE_SIZE : 0;
 
-        const scaledX = x * SCALE_FACTOR + MAP_OFFSET_X;
-        const scaledY = y * SCALE_FACTOR + MAP_OFFSET_Y;
-
-        const finalScale = SCALE_FACTOR * CHARACTER_SCALE;
-
         ctx.drawImage(
             this.sprite,
-            sourceX,
-            sourceY,
-            SPRITE_SIZE,
-            SPRITE_SIZE,
-            scaledX,
-            scaledY,
-            SPRITE_SIZE * finalScale,
-            SPRITE_SIZE * finalScale
+            sourceX,             // source x: frame position in sprite sheet
+            sourceY,             // source y: frame position in sprite sheet
+            SPRITE_SIZE,         // source width: exact frame size (no bleed)
+            SPRITE_SIZE,         // source height: exact frame size (no bleed)
+            x,
+            y,
+            SPRITE_DISPLAY_SIZE, // destination width: rendered size
+            SPRITE_DISPLAY_SIZE  // destination height: rendered size
         );
 
         // Draw the speech bubble if there's a message
         if (message) {
-            const bubbleX = scaledX + (SPRITE_SIZE * finalScale) / 2;
-            const bubbleY = scaledY;
+            const bubbleX = x + SPRITE_DISPLAY_SIZE / 2;
+            const bubbleY = y;
             this.drawSpeechBubble(ctx, bubbleX, bubbleY, message);
         }
     }
@@ -212,7 +211,7 @@ export class Character {
         let tailPosition: 'top' | 'bottom' = 'bottom';
         if (bubbleY < margin) {
             // Place bubble below character if too high
-            bubbleY = y + SPRITE_SIZE * SCALE_FACTOR + tailHeight;
+            bubbleY = y + SPRITE_DISPLAY_SIZE + tailHeight;
             tailPosition = 'top';
         }
 

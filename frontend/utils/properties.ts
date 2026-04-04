@@ -1,5 +1,6 @@
 // Sprite and animation constants
-export const SPRITE_SIZE = 100; // Keep original sprite size
+export const SPRITE_SIZE = 100;         // Actual frame size in the sprite sheet (fixed)
+export const SPRITE_DISPLAY_SIZE = 145; // Rendered size on canvas (45% larger than source)
 export const ANIMATION_FRAMES = 4;
 export const FRAME_DURATION = 200;
 
@@ -9,7 +10,7 @@ export const WEBSOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL;
 // Map constants — NYC Trading Floor (2444×1620 px)
 export const MAP_WIDTH = 2444;
 export const MAP_HEIGHT = 1620;
-export const DEBUG_WALKABLE_AREAS = true;  // Set false after tuning
+export const DEBUG_WALKABLE_AREAS = false;  // Set false after tuning
 export const DEBUG_CHARACTER_SELECT_BOXES = false;
 
 // AABB walkable zones (map coordinates)
@@ -20,66 +21,48 @@ export const WALKABLE_AREAS = [
     { name: 'Eric',   x: 1370, y: 580,  width: 1060, height: 1053 },
 ];
 
-// Precise polygon walkable zones (map coordinates, extracted from office map)
+// Precise polygon walkable zones (map coordinates, traced from office_dark_c2.png image map)
 export const WALKABLE_POLYGONS = {
-    rishi: [
-        { x: -1, y: 1366 }, { x: 4, y: 1455 }, { x: 444, y: 1453 },
-        { x: 465, y: 1449 }, { x: 465, y: 1490 }, { x: 545, y: 1486 },
-        { x: 547, y: 1628 }, { x: 1446, y: 1632 }, { x: 1431, y: 1501 },
-        { x: 1289, y: 1499 }, { x: 1284, y: 1548 }, { x: 1187, y: 1552 },
-        { x: 1168, y: 1505 }, { x: 989, y: 1496 }, { x: 978, y: 1550 },
-        { x: 877, y: 1554 }, { x: 864, y: 1511 }, { x: 763, y: 1503 },
-        { x: 765, y: 1261 }, { x: 696, y: 1257 }, { x: 700, y: 1488 },
-        { x: 577, y: 1488 }, { x: 575, y: 1412 }, { x: 547, y: 1331 },
-        { x: 649, y: 1249 }, { x: 843, y: 1245 }, { x: 893, y: 1217 },
-        { x: 1076, y: 1196 }, { x: 1173, y: 1211 }, { x: 1356, y: 1196 },
-        { x: 1389, y: 1245 }, { x: 1384, y: 1495 }, { x: 1533, y: 1452 },
-        { x: 1527, y: 892 }, { x: 1382, y: 898 }, { x: 1384, y: 1131 },
-        { x: 986, y: 1140 }, { x: 686, y: 1131 }, { x: 535, y: 1159 },
-        { x: 533, y: 1308 }, { x: 462, y: 1364 }
-    ],
-    eric: [
-        { x: 1865, y: 1124 }, { x: 1859, y: 1256 }, { x: 1727, y: 1254 },
-        { x: 1727, y: 1135 }, { x: 1647, y: 1135 }, { x: 1654, y: 1189 },
-        { x: 1583, y: 1189 }, { x: 1572, y: 1258 }, { x: 1389, y: 1271 },
-        { x: 1376, y: 1448 }, { x: 1580, y: 1430 }, { x: 1578, y: 1465 },
-        { x: 1667, y: 1435 }, { x: 1807, y: 1465 }, { x: 1813, y: 1620 },
-        { x: 2430, y: 1633 }, { x: 2430, y: 1428 }, { x: 2208, y: 1411 },
-        { x: 2180, y: 1517 }, { x: 1988, y: 1512 }, { x: 1990, y: 1191 },
-        { x: 1999, y: 1120 }, { x: 2078, y: 1094 }, { x: 2139, y: 1172 },
-        { x: 2195, y: 1183 }, { x: 2369, y: 1174 }, { x: 2378, y: 935 },
-        { x: 2283, y: 910 }, { x: 1981, y: 880 }, { x: 1932, y: 587 },
-        { x: 1729, y: 591 }, { x: 1589, y: 798 }, { x: 1378, y: 891 },
-        { x: 1865, y: 863 }, { x: 1863, y: 930 }
+    yasmin: [
+        { x: 89,   y: 683 }, { x: 81,   y: 903 }, { x: 1023, y: 907 },
+        { x: 1962, y: 881 }, { x: 1923, y: 599 }, { x: 1730, y: 605 },
+        { x: 1589, y: 819 }, { x: 829,  y: 829 }, { x: 826,  y: 676 },
+        { x: 604,  y: 674 }, { x: 594,  y: 765 }, { x: 214,  y: 780 },
+        { x: 169,  y: 726 }
     ],
     harper: [
-        { x: 854, y: 470 }, { x: 736, y: 480 }, { x: 141, y: 476 },
-        { x: 122, y: 672 }, { x: 145, y: 719 }, { x: 225, y: 741 },
-        { x: 283, y: 719 }, { x: 313, y: 719 }, { x: 352, y: 687 },
-        { x: 432, y: 694 }, { x: 849, y: 677 }, { x: 854, y: 813 },
-        { x: 1617, y: 813 }, { x: 1617, y: 892 }, { x: 859, y: 909 },
-        { x: 779, y: 875 }, { x: 550, y: 870 }, { x: 533, y: 907 },
-        { x: 106, y: 911 }, { x: 104, y: 810 }, { x: 29, y: 810 },
-        { x: 29, y: 396 }, { x: 824, y: 364 }, { x: 854, y: 379 },
-        { x: 865, y: 423 }
+        { x: 1393, y: 1159 }, { x: 1535, y: 1151 }, { x: 1535, y: 890  },
+        { x: 1873, y: 879  }, { x: 1873, y: 1123 }, { x: 2371, y: 1116 },
+        { x: 2296, y: 892  }, { x: 1985, y: 888  }, { x: 1977, y: 724  },
+        { x: 1938, y: 715  }, { x: 1929, y: 605  }, { x: 1729, y: 608  },
+        { x: 1595, y: 827  }, { x: 1388, y: 825  }
     ],
-    yasmin: [
-        { x: 158, y: 701 }, { x: 143, y: 908 }, { x: 1384, y: 891 },
-        { x: 1387, y: 1126 }, { x: 833, y: 1139 }, { x: 835, y: 1236 },
-        { x: 1384, y: 1246 }, { x: 1391, y: 1464 }, { x: 1805, y: 1451 },
-        { x: 1815, y: 1602 }, { x: 1992, y: 1626 }, { x: 1971, y: 1251 },
-        { x: 1535, y: 1261 }, { x: 1522, y: 886 }, { x: 1960, y: 889 },
-        { x: 1947, y: 654 }, { x: 1684, y: 673 }, { x: 1611, y: 794 },
-        { x: 854, y: 807 }, { x: 846, y: 680 }
+    eric: [
+        { x: 1387, y: 890  }, { x: 1529, y: 886  }, { x: 1535, y: 1270 },
+        { x: 1861, y: 1239 }, { x: 1871, y: 996  }, { x: 2331, y: 996  },
+        { x: 2343, y: 1179 }, { x: 1992, y: 1181 }, { x: 1986, y: 1509 },
+        { x: 2165, y: 1515 }, { x: 2182, y: 1614 }, { x: 1818, y: 1621 },
+        { x: 1818, y: 1470 }, { x: 1397, y: 1403 }
+    ],
+    rishi: [
+        { x: 544,  y: 1176 }, { x: 544,  y: 1284 }, { x: 1393, y: 1228 },
+        { x: 1386, y: 1497 }, { x: 557,  y: 1471 }, { x: 557,  y: 1616 },
+        { x: 1455, y: 1614 }, { x: 1438, y: 1469 }, { x: 1529, y: 1458 },
+        { x: 1544, y: 814  }, { x: 1397, y: 805  }, { x: 1386, y: 1131 },
+        { x: 1238, y: 1200 }, { x: 1080, y: 1146 }, { x: 932,  y: 1198 },
+        { x: 787,  y: 1142 }, { x: 639,  y: 1200 }
     ]
 };
 
-// Character spawn positions (map coordinates, inside each agent's walkable zone)
+// Maps character index (0=Eric, 1=Harper, 2=Rishi, 3=Yasmin) to their polygon zone key
+export const AGENT_ZONE_KEYS: (keyof typeof WALKABLE_POLYGONS)[] = ['eric', 'harper', 'rishi', 'yasmin'];
+
+// Character spawn positions (map coordinates, sprite top-left, with bottom-center foot anchor inside zone)
 export const CHARACTER_SPAWN_POSITIONS = [
-    { name: 'Eric',   x: 2000, y: 1000 },
-    { name: 'Harper', x: 700,  y: 600  },
-    { name: 'Rishi',  x: 700,  y: 1300 },
-    { name: 'Yasmin', x: 1000, y: 900  },
+    { name: 'Eric',   x: 1863, y: 1372 },
+    { name: 'Harper', x: 1796, y: 783 },
+    { name: 'Rishi',  x: 1455, y: 1246 },
+    { name: 'Yasmin', x: 710,  y: 755 },
 ];
 
 // Canvas dimensions match the map for 1:1 coordinate mapping
