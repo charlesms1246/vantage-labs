@@ -18,26 +18,41 @@ function loadArtifact(contractName: string): { abi: ethers.InterfaceAbi; bytecod
 export class GenerateContractTool extends StructuredTool {
   name = "generate_contract";
   description =
-    "Generate compiled contract data ready for on-chain deployment. Returns ABI, bytecode, and constructorArgs — pass the entire output directly to deploy_contract.";
+    "Generate compiled contract data ready for on-chain deployment. Supports ERC20, ERC721/NFT, ERC1155, NFT Marketplace, DAO, Staking, Vesting, and Tipping contracts. Returns ABI, bytecode, and constructorArgs — pass the entire output directly to deploy_contract.";
   schema = z.object({
-    type: z.enum(["ERC20", "ERC721", "NFT"]).describe("Contract type: ERC20 for fungible token, ERC721/NFT for non-fungible token"),
-    name: z.string().describe("Token or NFT collection name"),
-    symbol: z.string().describe("Ticker symbol (e.g. VTG, VNFT)"),
+    type: z
+      .enum(["ERC20", "ERC721", "NFT", "ERC1155", "MARKETPLACE", "DAO", "STAKING", "VESTING", "TIPPING"])
+      .describe(
+        "Contract type: ERC20 (fungible), ERC721/NFT (non-fungible), ERC1155 (multi-token), MARKETPLACE (NFT trading), DAO (governance), STAKING (rewards), VESTING (linear unlock), TIPPING (ETH/FLOW tips)"
+      ),
+    name: z.string().optional().describe("Token/collection/contract name (required for most types)"),
+    symbol: z.string().optional().describe("Ticker symbol (required for ERC20, ERC721, ERC1155)"),
     initialSupply: z.number().optional().describe("Initial supply for ERC20 tokens (default 1000000)"),
+    baseURI: z.string().optional().describe("Base metadata URI for ERC1155 (e.g. ipfs://{id}.json)"),
+    feeBps: z.number().optional().describe("Platform fee in basis points for Marketplace (e.g. 250 = 2.5%)"),
+    governanceToken: z.string().optional().describe("ERC20 token address for DAO governance"),
+    votingPeriod: z.number().optional().describe("DAO voting period in seconds (default 259200 = 3 days)"),
+    timelockDelay: z.number().optional().describe("DAO timelock delay in seconds (default 86400 = 1 day)"),
+    quorumVotes: z.string().optional().describe("DAO quorum in raw token units (e.g. 1000000000000000000 for 1 token)"),
+    stakingToken: z.string().optional().describe("ERC20 token address users stake"),
+    rewardToken: z.string().optional().describe("ERC20 token distributed as rewards"),
+    rewardsDuration: z.number().optional().describe("Staking reward period in seconds (default 604800 = 7 days)"),
+    vestingToken: z.string().optional().describe("ERC20 token address to vest"),
+    beneficiary: z.string().optional().describe("Beneficiary wallet address for vesting"),
+    cliffEnd: z.number().optional().describe("Unix timestamp when cliff ends (vesting begins)"),
+    vestingEnd: z.number().optional().describe("Unix timestamp when vesting fully completes"),
+    totalAmount: z.string().optional().describe("Total tokens to vest (in raw wei)"),
   });
 
-  async _call({ type, name, symbol, initialSupply }: {
-    type: string;
-    name: string;
-    symbol: string;
-    initialSupply?: number;
-  }): Promise<string> {
-    const contractType = type.toUpperCase();
-    const cleanSymbol = symbol.replace(/\s+/g, "");
+  async _call(params: Record<string, unknown>): Promise<string> {
+    const type = (params.type as string).toUpperCase();
+    const name = (params.name as string | undefined) ?? "";
+    const symbol = (params.symbol as string | undefined) ?? "";
 
     try {
-      if (contractType === "ERC721" || contractType === "NFT") {
+      if (type === "ERC721" || type === "NFT") {
         const { abi, bytecode } = loadArtifact("SampleNFT");
+        const cleanSymbol = symbol.replace(/\s+/g, "");
         return JSON.stringify({
           type: "ERC721",
           name,
@@ -45,12 +60,15 @@ export class GenerateContractTool extends StructuredTool {
           abi,
           bytecode,
           constructorArgs: [name, cleanSymbol],
-          note: `ERC721 NFT contract compiled. Pass this full JSON to deploy_contract as-is.`,
+          note: "ERC721 NFT contract compiled. Pass full JSON to deploy_contract.",
         });
-      } else {
+      }
+
+      if (type === "ERC20") {
         const { abi, bytecode } = loadArtifact("SampleToken");
-        const supply = initialSupply ?? 1_000_000;
+        const supply = (params.initialSupply as number | undefined) ?? 1_000_000;
         const supplyWei = (BigInt(supply) * BigInt(10 ** 18)).toString();
+        const cleanSymbol = symbol.replace(/\s+/g, "");
         return JSON.stringify({
           type: "ERC20",
           name,
@@ -58,9 +76,105 @@ export class GenerateContractTool extends StructuredTool {
           abi,
           bytecode,
           constructorArgs: [name, cleanSymbol, supplyWei],
-          note: `ERC20 token compiled: ${name} (${cleanSymbol}) with ${supply} initial supply. Pass this full JSON to deploy_contract as-is.`,
+          note: `ERC20 token: ${name} (${cleanSymbol}) with ${supply} initial supply.`,
         });
       }
+
+      if (type === "ERC1155") {
+        const { abi, bytecode } = loadArtifact("ERC1155MultiToken");
+        const cleanSymbol = symbol.replace(/\s+/g, "");
+        const baseURI = (params.baseURI as string | undefined) ?? "ipfs://{id}.json";
+        return JSON.stringify({
+          type: "ERC1155",
+          name,
+          symbol: cleanSymbol,
+          abi,
+          bytecode,
+          constructorArgs: [name, cleanSymbol, baseURI],
+          note: `ERC1155 multi-token contract: ${name} (${cleanSymbol}) with baseURI ${baseURI}.`,
+        });
+      }
+
+      if (type === "MARKETPLACE") {
+        const { abi, bytecode } = loadArtifact("NFTMarketplace");
+        const feeBps = (params.feeBps as number | undefined) ?? 250;
+        if (feeBps < 0 || feeBps > 1000) {
+          throw new Error("feeBps must be between 0 and 1000 (0% to 10%)");
+        }
+        return JSON.stringify({
+          type: "MARKETPLACE",
+          abi,
+          bytecode,
+          constructorArgs: [feeBps],
+          note: `NFT Marketplace with platform fee ${feeBps} basis points (${(feeBps / 100).toFixed(1)}%).`,
+        });
+      }
+
+      if (type === "DAO") {
+        const { abi, bytecode } = loadArtifact("SimpleDAO");
+        const governanceToken = params.governanceToken as string;
+        if (!governanceToken) throw new Error("governanceToken address required for DAO");
+        const votingPeriod = (params.votingPeriod as number | undefined) ?? 259200;
+        const timelockDelay = (params.timelockDelay as number | undefined) ?? 86400;
+        const quorumVotesStr = (params.quorumVotes as string | undefined) ?? ethers.parseEther("1000").toString();
+        return JSON.stringify({
+          type: "DAO",
+          abi,
+          bytecode,
+          constructorArgs: [governanceToken, votingPeriod, timelockDelay, quorumVotesStr],
+          note: `DAO with voting period ${votingPeriod}s, timelock ${timelockDelay}s, quorum ${quorumVotesStr} tokens.`,
+        });
+      }
+
+      if (type === "STAKING") {
+        const { abi, bytecode } = loadArtifact("StakingRewards");
+        const stakingToken = params.stakingToken as string;
+        const rewardToken = params.rewardToken as string;
+        if (!stakingToken || !rewardToken) {
+          throw new Error("stakingToken and rewardToken addresses required for StakingRewards");
+        }
+        const rewardsDuration = (params.rewardsDuration as number | undefined) ?? 604800;
+        return JSON.stringify({
+          type: "STAKING",
+          abi,
+          bytecode,
+          constructorArgs: [stakingToken, rewardToken, rewardsDuration],
+          note: `Staking contract: stake ${stakingToken}, earn ${rewardToken} over ${rewardsDuration}s periods.`,
+        });
+      }
+
+      if (type === "VESTING") {
+        const { abi, bytecode } = loadArtifact("VestingWallet");
+        const vestingToken = params.vestingToken as string;
+        const beneficiary = params.beneficiary as string;
+        const cliffEnd = params.cliffEnd as number | undefined;
+        const vestingEnd = params.vestingEnd as number | undefined;
+        const totalAmount = params.totalAmount as string | undefined;
+        if (!vestingToken || !beneficiary || cliffEnd === undefined || vestingEnd === undefined) {
+          throw new Error("vestingToken, beneficiary, cliffEnd, and vestingEnd required for VestingWallet");
+        }
+        const amount = totalAmount ?? "0";
+        return JSON.stringify({
+          type: "VESTING",
+          abi,
+          bytecode,
+          constructorArgs: [vestingToken, beneficiary, cliffEnd, vestingEnd, amount],
+          note: `Vesting: cliff ${new Date(cliffEnd * 1000).toISOString()}, vesting ${new Date(vestingEnd * 1000).toISOString()}.`,
+        });
+      }
+
+      if (type === "TIPPING") {
+        const { abi, bytecode } = loadArtifact("TippingContract");
+        return JSON.stringify({
+          type: "TIPPING",
+          abi,
+          bytecode,
+          constructorArgs: [],
+          note: "Tipping contract for ETH/FLOW accumulation and withdrawal (no constructor args).",
+        });
+      }
+
+      throw new Error(`Unknown contract type: ${type}`);
     } catch (err) {
       return JSON.stringify({ error: `Failed to load contract artifact: ${(err as Error).message}` });
     }

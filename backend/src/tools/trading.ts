@@ -26,7 +26,7 @@ export class PrepareTxTool extends StructuredTool {
     "Prepare a transaction for user approval and fetch live on-chain context (deployer balance, current block). Returns tx data with real on-chain context ready for approval.";
   schema = z.object({
     action: z.string().describe("Action to perform, e.g. 'mint_vtg', 'send_tip', 'mint_nft'"),
-    params: z.record(z.unknown()).optional().describe("Action parameters such as recipient address and amount"),
+    params: z.record(z.string(), z.unknown()).optional().describe("Action parameters such as recipient address and amount"),
   });
 
   async _call({ action, params = {} }: { action: string; params?: Record<string, unknown> }): Promise<string> {
