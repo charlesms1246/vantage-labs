@@ -32,6 +32,7 @@ import { ChatEventsPanel } from './ChatEventsPanel';
 import { GameContainer } from './GameContainer';
 import { God } from './God';
 import NotificationBoard from './NotificationBoard';
+import { SystemEventsPanel } from './SystemEventsPanel';
 import { Logo } from './Logo';
 import { ThemeToggle } from './ThemeToggle';
 import { WalletAddress } from './WalletAddress';
@@ -165,9 +166,11 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
     const [playerStates, setPlayerStates] = useState<PlayerState[]>([]);
     const [controlledCharacterIndex, setControlledCharacterIndex] = useState<number | null>(null);
     const [isInputActive, setIsInputActive] = useState<boolean>(false);
+    const [isProcessing, setIsProcessing] = useState<boolean>(false);
     const [isHoveredIndex, setIsHoveredIndex] = useState<number | null>(null);
     const [inputValue, setInputValue] = useState<string>('');
     const [notifications, setNotifications] = useState<any[]>([]);
+    const [systemEvents, setSystemEvents] = useState<any[]>([]);
     const [chatMessages, setChatMessages] = useState<{
         id: string;
         message: string;
@@ -268,7 +271,70 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
         try {
             const parsed = JSON.parse(message);
 
-            // agent_response with tool_use status → add tool call to chat
+            // agent_llm_output → Agent Chat (the agent's final prose response)
+            // Note: We keep this for compatibility if the backend is running the latest emitter code.
+            if (parsed.type === "agent_llm_output" && parsed.content) {
+                const agentName = parsed.agent ?? "Agent";
+                const content = typeof parsed.content === "string" ? parsed.content : JSON.stringify(parsed.content);
+                const clean = content.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+                
+                if (clean) {
+                    const charIdx = AGENT_CHARACTER_INDEX[agentName.toLowerCase()];
+                    if (charIdx !== undefined) {
+                        handleCharacterMessage(charIdx, clean);
+                    } else {
+                        setChatMessages(prev => [...prev, {
+                            id: crypto.randomUUID(),
+                            message: clean,
+                            timestamp: new Date(),
+                            characterName: agentName,
+                        }].slice(-50));
+                    }
+                }
+                return;
+            }
+
+            // Fallback for agents: process the "complete" agent_response natively as the LLM output
+            // This ensures it works perfectly even if the backend wasn't restarted to emit agent_llm_output.
+            if (parsed.type === "agent_response" && parsed.status === "complete") {
+                const agentName = parsed.agent ?? "Agent";
+                const resultText = parsed.result ? (typeof parsed.result === "string" ? parsed.result : JSON.stringify(parsed.result)) : "";
+                let clean = resultText.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+                
+                // If the agent returned an empty string or only an internal think block, supply a fallback message.
+                if (!clean) {
+                    clean = `✅ Executed successfully.`;
+                }
+                
+                const charIdx = AGENT_CHARACTER_INDEX[agentName.toLowerCase()];
+                if (charIdx !== undefined) {
+                    // Triggers both the speech bubble on the canvas AND pushes it into chatMessages.
+                    handleCharacterMessage(charIdx, clean);
+                } else {
+                    // Fallback for Orchestrator or agents not spawned on the canvas: push directly to Chat.
+                    setChatMessages(prev => [...prev, {
+                        id: crypto.randomUUID(),
+                        message: clean,
+                        timestamp: new Date(),
+                        characterName: agentName,
+                    }].slice(-50));
+                }
+                return;
+            }
+
+            // system_log → Events panel (real-time backend log from logger.ts)
+            if (parsed.type === "system_log") {
+                setSystemEvents(prev => [{
+                    id: parsed.id ?? crypto.randomUUID(),
+                    category: parsed.category ?? "SYSTEM",
+                    level: parsed.level ?? "INFO",
+                    message: parsed.message ?? "",
+                    data: parsed.data,
+                    timestamp: new Date(parsed.timestamp ?? Date.now()),
+                }, ...prev].slice(0, 200));
+                return;
+            }
+
             if (parsed.type === "agent_response" && parsed.status === "tool_use") {
                 const agentName = parsed.agent ?? "Agent";
                 const toolName: string = parsed.toolName ?? "unknown_tool";
@@ -299,70 +365,50 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
                         ? `🎨 **generate_image**\n\n![Generated Image](${imageUrl})${desc ? `\n\n${desc}` : ""}`
                         : `🎨 **generate_image**\n\n${toolResult.slice(0, 300)}`;
                 } else {
-                    // Generic tool result: show name + truncated result
-                    const preview = toolResult.length > 300 ? toolResult.slice(0, 300) + "…" : toolResult;
-                    messageText = `🔧 **${toolName}**\n\n${preview}`;
+                    // Generic tool result: show ONLY the header for the Chat tab and bubble
+                    messageText = `🔧 **${toolName}**`;
                 }
 
-                setChatMessages((prev) =>
-                    [
-                        ...prev,
-                        {
-                            id: crypto.randomUUID(),
-                            message: messageText,
-                            timestamp: new Date(),
-                            characterName: agentName,
-                        },
-                    ].slice(-50)
-                );
+                const charIdx = AGENT_CHARACTER_INDEX[agentName.toLowerCase()];
+                if (charIdx !== undefined) {
+                    handleCharacterMessage(charIdx, messageText);
+                } else {
+                    setChatMessages((prev) =>
+                        [
+                            ...prev,
+                            {
+                                id: crypto.randomUUID(),
+                                message: messageText,
+                                timestamp: new Date(),
+                                characterName: agentName,
+                            },
+                        ].slice(-50)
+                    );
+                }
                 return;
             }
 
-            // agent_response "executing" → show which agent started its task
+            // agent_response "executing" → show the Orchestrator's system input task to the agent in the Chat
             if (parsed.type === "agent_response" && parsed.status === "executing") {
                 const agentName = parsed.agent ?? "Agent";
-                const taskPreview = typeof parsed.task === "string"
-                    ? parsed.task.slice(0, 120) + (parsed.task.length > 120 ? "…" : "")
-                    : "";
+                const taskStr = typeof parsed.task === "string" ? parsed.task : "";
+
+                if (taskStr.trim()) {
+                    setChatMessages(prev => [...prev, {
+                        id: crypto.randomUUID(),
+                        message: taskStr,
+                        timestamp: new Date(),
+                        characterName: "Orchestrator",
+                    }].slice(-50));
+                }
+                
+                // Also retain a minimal event for the Notification board if desired
+                const taskPreview = taskStr.slice(0, 120) + (taskStr.length > 120 ? "…" : "");
                 setNotifications(prev => [{
                     id: crypto.randomUUID(),
-                    message: `${agentName} → ${taskPreview}`,
+                    message: `${agentName} receiving task...`,
                     timestamp: new Date(),
                     metadata: { agent: parsed.agent, status: "executing" },
-                }, ...prev].slice(0, 50));
-                return;
-            }
-
-            // agent_response with a completed result → add to notifications
-            // (Character.tsx's own agent_response listener handles speech bubbles + chat history)
-            if (parsed.type === "agent_response" && parsed.status === "complete" && parsed.result) {
-                const resultText = typeof parsed.result === "string"
-                    ? parsed.result
-                    : JSON.stringify(parsed.result);
-
-                // Extract an imgbb, Lighthouse, or picsum image URL if present (for inline image display).
-                // Try JSON parse first so we get the URL even when the LLM doesn't repeat it verbatim.
-                const IMAGE_URL_RE = /(https:\/\/i\.ibb\.co\/[^\s)">\]]+|https:\/\/gateway\.lighthouse\.storage\/ipfs\/[^\s)">\]]+|https:\/\/picsum\.photos\/[^\s)">\]]+)/;
-                let imageUrl: string | undefined;
-                try {
-                    const parsed_result = JSON.parse(resultText);
-                    imageUrl = parsed_result?.url ?? parsed_result?.imgbbUrl ?? parsed_result?.lighthouseUrl;
-                    // Validate it looks like an image host URL
-                    if (imageUrl && !IMAGE_URL_RE.test(imageUrl)) imageUrl = undefined;
-                } catch { /* not JSON — fall back to regex scan */ }
-                if (!imageUrl) {
-                    imageUrl = IMAGE_URL_RE.exec(resultText)?.[0];
-                }
-
-                setNotifications(prev => [{
-                    id: crypto.randomUUID(),
-                    message: `[${parsed.agent ?? "Agent"}] ${resultText}`,
-                    timestamp: new Date(),
-                    metadata: {
-                        agent: parsed.agent,
-                        status: parsed.status,
-                        ...(imageUrl ? { url: imageUrl } : {}),
-                    },
                 }, ...prev].slice(0, 50));
                 return;
             }
@@ -380,6 +426,7 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
 
             // execution_complete → show proof links and push any results not yet in chat
             if (parsed.type === "execution_complete") {
+                setIsProcessing(false);
                 const parts: string[] = ["✅ All agents done."];
                 if (parsed.logCid) parts.push(`📦 IPFS: ${parsed.logUrl || `ipfs://${parsed.logCid}`}`);
                 if (parsed.onChainTxHash) parts.push(`⛓️ Flow EVM${parsed.proofTokenId ? ` NFT #${parsed.proofTokenId}` : ""}: ${parsed.onChainExplorerUrl}`);
@@ -391,6 +438,11 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
                 }, ...prev].slice(0, 50));
                 return;
             }
+
+            if (parsed.type === "error") {
+                setIsProcessing(false);
+            }
+
         } catch {
             // Not JSON — fall through to plain notification
         }
@@ -406,6 +458,7 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
     }, []);
 
     const handleGodError = useCallback((error: string) => {
+        setIsProcessing(false);
         console.error('God error:', error);
     }, []);
 
@@ -1057,6 +1110,7 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
                 // Send message through God
                 if (godRef.current) {
                     godRef.current.sendMessage(inputValue);
+                    setIsProcessing(true);
                 } else {
                     console.error('God instance not initialized');
                 }
@@ -1106,6 +1160,7 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
             // Send message through God
             if (godRef.current) {
                 godRef.current.sendMessage(message);
+                setIsProcessing(true);
             } else {
                 console.error('God instance not initialized');
             }
@@ -1174,7 +1229,7 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
                             <Chat
                                 messages={chatMessages}
                                 onSendMessage={handleGlobalMessage}
-                                disabled={!isInitialized}
+                                disabled={!isInitialized || isProcessing}
                             />
                         ) : (
                             <div className="h-full flex items-center justify-center">
@@ -1182,7 +1237,12 @@ const Game = ({ userId, walletAddress }: { userId: string, walletAddress: string
                             </div>
                         )
                     }
-                    eventsContent={<NotificationBoard notifications={notifications} />}
+                    eventsContent={
+                    <SystemEventsPanel
+                        systemEvents={systemEvents}
+                        notifications={notifications}
+                    />
+                }
                 />
             </div>
         </div>

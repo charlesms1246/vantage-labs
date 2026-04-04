@@ -11,6 +11,8 @@ export class God {
     chatMode: 'STANDARD' | 'RECURSIVE';
     private agentResponseHandler: (data: unknown) => void;
     private agentThinkingHandler: (data: unknown) => void;
+    private agentLlmOutputHandler: (data: unknown) => void;
+    private systemLogHandler: (data: unknown) => void;
     private executionCompleteHandler: (data: unknown) => void;
     private planReadyHandler: (data: unknown) => void;
     private errorHandler: (data: unknown) => void;
@@ -41,6 +43,8 @@ export class God {
 
         this.agentResponseHandler = forward("agent_response");
         this.agentThinkingHandler = forward("agent_thinking");
+        this.agentLlmOutputHandler = forward("agent_llm_output");
+        this.systemLogHandler = forward("system_log");
         this.executionCompleteHandler = forward("execution_complete");
         this.planReadyHandler = forward("plan_ready");
         this.errorHandler = (data: unknown) => {
@@ -50,6 +54,8 @@ export class God {
 
         socketManager.on('agent_response', this.agentResponseHandler);
         socketManager.on('agent_thinking', this.agentThinkingHandler);
+        socketManager.on('agent_llm_output', this.agentLlmOutputHandler);
+        socketManager.on('system_log', this.systemLogHandler);
         socketManager.on('execution_complete', this.executionCompleteHandler);
         socketManager.on('plan_ready', this.planReadyHandler);
         socketManager.on('error', this.errorHandler);
@@ -58,6 +64,8 @@ export class God {
     public closeWebSocket() {
         socketManager.off('agent_response', this.agentResponseHandler);
         socketManager.off('agent_thinking', this.agentThinkingHandler);
+        socketManager.off('agent_llm_output', this.agentLlmOutputHandler);
+        socketManager.off('system_log', this.systemLogHandler);
         socketManager.off('execution_complete', this.executionCompleteHandler);
         socketManager.off('plan_ready', this.planReadyHandler);
         socketManager.off('error', this.errorHandler);

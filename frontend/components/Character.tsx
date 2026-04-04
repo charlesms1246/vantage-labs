@@ -42,26 +42,6 @@ export class Character {
         this.userId = userId;
         this.address = address;
 
-        // Bind message handler with agent name filter
-        this.messageHandler = (data: unknown) => {
-            const parsed = data as any;
-            if (!parsed.agent || parsed.agent.toLowerCase() !== this.name.toLowerCase()) {
-                return;
-            }
-            // Skip tool_use events — they're handled by Game.tsx handleGodMessage
-            if (parsed.status === 'tool_use') {
-                return;
-            }
-            const message = parsed.result || parsed.content || parsed.message || '';
-            if (message.trim()) {
-                this.onMessageReceived(this.index, message);
-                setTimeout(() => this.onMessageReceived(this.index, ''), 8000);
-            }
-        };
-
-        // Register socketManager listener
-        socketManager.on('agent_response', this.messageHandler);
-
         this.loadSprite(spriteSrc, onLoad);
 
         Character.allCharacters.push(this);
@@ -88,7 +68,7 @@ export class Character {
     }
 
     public closeWebSocket() {
-        socketManager.off('agent_response', this.messageHandler);
+        // No-op now since Game.tsx manages socket connections
     }
 
     draw(
