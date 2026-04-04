@@ -13,7 +13,7 @@ export type ModelType =
   | "openrouter-nemotron"  // Rishi primary → nvidia/nemotron-3-super-120b-a12b:free (fallback)
   | "openrouter-qwen"      // Rishi secondary → qwen/qwen3.6-plus-preview:free
 
-export function getLLM(model: ModelType) {
+export function getLLM(model: ModelType): ReturnType<typeof createGroqModel> | ReturnType<typeof createGeminiModel> | ReturnType<typeof createOpenRouterModel> {
   switch (model) {
     case "groq":
       return createGroqModel();
@@ -36,6 +36,12 @@ export function getLLM(model: ModelType) {
     case "openrouter-nemotron":
       return createOpenRouterModel("nvidia/nemotron-3-super-120b-a12b:free");
     case "openrouter-qwen":
-      return createOpenRouterModel("qwen/qwen3.6-plus-preview:free");
+      return createOpenRouterModel("qwen/qwen3.6-plus:free");
+    default: {
+      // This should never happen if ModelType is exhaustive — but guards against
+      // runtime mismatches (e.g. env config passing an unrecognised model string).
+      const exhaustiveCheck: never = model;
+      throw new Error(`[getLLM] Unknown model type: "${exhaustiveCheck}". Check ModelType union and agent config.`);
+    }
   }
 }

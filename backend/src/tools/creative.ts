@@ -83,7 +83,7 @@ export class GenerateImageTool extends StructuredTool {
       };
 
       let response: AsyncGenerator<GenerateContentResponse> | undefined;
-      const MAX_ATTEMPTS = 3;
+      const MAX_ATTEMPTS = 2;
       for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
         try {
           response = await ai.models.generateContentStream(genParams);

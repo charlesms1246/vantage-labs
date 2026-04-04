@@ -7,6 +7,55 @@ import { config } from "../config/env";
 import SampleTokenABI from "../../contracts/abis/SampleToken.json";
 import { logger } from "../services/logger";
 
+export class QueryBalanceTool extends StructuredTool {
+  name = "query_balance";
+  description = "Query the native ETH balance and optional ERC20 token balance for any wallet or contract address on Flow EVM Testnet.";
+  schema = z.object({
+    address: z.string().describe("The wallet or contract address to query"),
+    tokenContractAddress: z.string().optional().describe("Optional: An ERC20 token address to check token balance for the wallet"),
+  });
+
+  async _call({ address, tokenContractAddress }: { address: string; tokenContractAddress?: string }): Promise<string> {
+    try {
+      const [blockNumber, nativeBalanceRes] = await Promise.all([
+        flowProvider.getBlockNumber(),
+        flowProvider.getBalance(address),
+      ]);
+      const nativeBalance = ethers.formatEther(nativeBalanceRes);
+
+      let tokenBalanceStr = "N/A";
+      let tokenSymbol = "Tokens";
+      if (tokenContractAddress && ethers.isAddress(tokenContractAddress)) {
+        try {
+          const tokenContract = new ethers.Contract(tokenContractAddress, [
+            "function balanceOf(address owner) external view returns (uint256)",
+            "function symbol() external view returns (string)"
+          ], flowProvider);
+          const [balance, symbol] = await Promise.all([
+            tokenContract.balanceOf(address),
+            tokenContract.symbol().catch(() => "Tokens")
+          ]);
+          tokenBalanceStr = ethers.formatEther(balance);
+          tokenSymbol = symbol;
+        } catch {}
+      }
+
+      logger.info("ONCHAIN", "[Eric] query_balance: success", { address, nativeBalance, network: "flow-evm-testnet" });
+      return JSON.stringify({
+        address,
+        nativeEthBalance: nativeBalance,
+        ...(tokenContractAddress ? { tokenBalance: `${tokenBalanceStr} ${tokenSymbol}`, tokenContractAddress } : {}),
+        network: "flow-evm-testnet",
+        chainId: 545,
+        blockNumber,
+        queriedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      return JSON.stringify({ error: `Failed to query balance for ${address}: ${(err as Error).message}` });
+    }
+  }
+}
+
 export class AnalyzeMarketTool extends StructuredTool {
   name = "analyze_market";
   description =

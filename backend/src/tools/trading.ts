@@ -55,17 +55,27 @@ export class ExecuteSwapTool extends StructuredTool {
   description =
     "Execute an on-chain action on Flow EVM Testnet using the deployer wallet. Supports minting VTG tokens ('mint_vtg'), sending an ETH tip ('send_tip'), or minting an NFT ('mint_nft').";
   schema = z.object({
-    action: z.enum(["mint_vtg", "mint_token", "send_tip", "mint_nft"]).describe("On-chain action to execute"),
+    action: z.enum(["mint_vtg", "mint_token", "send_tip", "mint_nft", "transfer_nft", "transfer_token", "transfer_eth", "interact_contract"]).describe("On-chain action to execute"),
     recipient: z.string().optional().describe("Recipient wallet address"),
-    amount: z.string().optional().describe("Amount — token count for mint_vtg, ETH for send_tip (e.g. '100' or '0.001')"),
+    amount: z.string().optional().describe("Amount — token count, or ETH for transfer_eth/send_tip (e.g. '100' or '0.001')"),
     tokenURI: z.string().optional().describe("Token URI for mint_nft action"),
+    contractAddress: z.string().optional().describe("The smart contract address (required for transfer_nft or interact_contract)"),
+    tokenId: z.string().optional().describe("The tokenId to transfer (required for transfer_nft)"),
+    methodName: z.string().optional().describe("The contract function name to call (required for interact_contract)"),
+    abi: z.array(z.string()).optional().describe("A human-readable ABI array for the contract (required for interact_contract). E.g. ['function transfer(address to, uint amount)']"),
+    args: z.array(z.unknown()).optional().describe("Arguments to pass to the method in interact_contract"),
   });
 
-  async _call({ action, recipient, amount, tokenURI }: {
+  async _call({ action, recipient, amount, tokenURI, contractAddress, tokenId, methodName, abi, args }: {
     action: string;
     recipient?: string;
     amount?: string;
     tokenURI?: string;
+    contractAddress?: string;
+    tokenId?: string;
+    methodName?: string;
+    abi?: string[];
+    args?: unknown[];
   }): Promise<string> {
     const deployerAddress = getDeployerWallet(flowProvider).address;
     const to = recipient || deployerAddress;
@@ -102,6 +112,80 @@ export class ExecuteSwapTool extends StructuredTool {
           explorerUrl: `https://evm-testnet.flowscan.io/tx/${txHash}`,
           network: "flow-evm-testnet",
           message: `Minted VNFT #${tokenId} to ${to} on Flow EVM Testnet`,
+        });
+      }
+
+      if (action === "transfer_nft") {
+        const targetContract = contractAddress || config.SAMPLE_NFT_ADDRESS;
+        if (!targetContract || !tokenId || !recipient) {
+          return JSON.stringify({ error: "Missing required parameters for transfer_nft: contractAddress (or default), tokenId, recipient" });
+        }
+        logger.info("ONCHAIN", "[Harper] transferNFT", { contractAddress: targetContract, from: deployerAddress, to: recipient, tokenId, network: "flow-evm-testnet" });
+        const txHash = await flowService.transferNFT(targetContract, deployerAddress, recipient, tokenId);
+        logger.info("ONCHAIN", "[Harper] transferNFT: success", { txHash, explorerUrl: `https://evm-testnet.flowscan.io/tx/${txHash}` });
+        return JSON.stringify({
+          success: true, action: "transfer_nft", recipient, tokenId, contractAddress: targetContract, txHash,
+          explorerUrl: `https://evm-testnet.flowscan.io/tx/${txHash}`,
+          network: "flow-evm-testnet",
+          message: `Transferred NFT #${tokenId} from contract ${targetContract} to ${recipient}`
+        });
+      }
+
+      if (action === "transfer_token") {
+        const targetContract = contractAddress || config.SAMPLE_TOKEN_ADDRESS;
+        if (!targetContract || !recipient || !amount) {
+          return JSON.stringify({ error: "Missing required parameters for transfer_token: contractAddress, recipient, amount" });
+        }
+        const amountNum = parseFloat(amount);
+        if (isNaN(amountNum) || amountNum <= 0) {
+          return JSON.stringify({ error: "Invalid amount — provide a positive number of tokens to transfer" });
+        }
+        // Assumes 18 decimals by default for tokens
+        const amountWei = BigInt(Math.floor(amountNum * 1e18));
+        logger.info("ONCHAIN", "[Harper] transferToken", { targetContract, to: recipient, amount: `${amountNum} tokens`, network: "flow-evm-testnet" });
+        const txHash = await flowService.transferToken(targetContract, recipient, amountWei);
+        logger.info("ONCHAIN", "[Harper] transferToken: success", { txHash, explorerUrl: `https://evm-testnet.flowscan.io/tx/${txHash}` });
+        return JSON.stringify({
+          success: true, action: "transfer_token", recipient, amount: `${amountNum}`, contractAddress: targetContract, txHash,
+          explorerUrl: `https://evm-testnet.flowscan.io/tx/${txHash}`,
+          network: "flow-evm-testnet",
+          message: `Transferred ${amountNum} tokens from contract ${targetContract} to ${recipient}`
+        });
+      }
+
+      if (action === "transfer_eth") {
+        if (!recipient || !amount) {
+          return JSON.stringify({ error: "Missing required parameters for transfer_eth: recipient, amount" });
+        }
+        const amountNum = parseFloat(amount);
+        if (isNaN(amountNum) || amountNum <= 0) {
+          return JSON.stringify({ error: "Invalid amount — provide a positive amount of ETH to transfer" });
+        }
+        const amountWei = ethers.parseEther(amount);
+        logger.info("ONCHAIN", "[Harper] transferETH", { to: recipient, amount: `${amountNum} ETH`, network: "flow-evm-testnet" });
+        const txHash = await flowService.transferETH(recipient, amountWei);
+        logger.info("ONCHAIN", "[Harper] transferETH: success", { txHash, explorerUrl: `https://evm-testnet.flowscan.io/tx/${txHash}` });
+        return JSON.stringify({
+          success: true, action: "transfer_eth", recipient, amount: `${amountNum} ETH`, txHash,
+          explorerUrl: `https://evm-testnet.flowscan.io/tx/${txHash}`,
+          network: "flow-evm-testnet",
+          message: `Transferred ${amountNum} ETH directly to ${recipient}`
+        });
+      }
+
+      if (action === "interact_contract") {
+        if (!contractAddress || !methodName || !abi) {
+          return JSON.stringify({ error: "Missing required parameters for interact_contract: contractAddress, methodName, abi" });
+        }
+        const contractArgs = args || [];
+        logger.info("ONCHAIN", `[Harper] interactContract: ${methodName}`, { contractAddress, methodName, args: contractArgs });
+        const txHash = await flowService.interactContract(contractAddress, abi, methodName, contractArgs);
+        logger.info("ONCHAIN", `[Harper] interactContract: success`, { txHash, explorerUrl: `https://evm-testnet.flowscan.io/tx/${txHash}` });
+        return JSON.stringify({
+          success: true, action: "interact_contract", contractAddress, methodName, txHash,
+          explorerUrl: `https://evm-testnet.flowscan.io/tx/${txHash}`,
+          network: "flow-evm-testnet",
+          message: `Successfully executed ${methodName} on ${contractAddress}`
         });
       }
 

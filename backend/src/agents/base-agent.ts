@@ -65,11 +65,15 @@ export abstract class BaseAgent {
     let lastOutput = "";
 
     // Try to bind tools for native function calling (supported by most OpenAI-compatible endpoints)
+    if (!this.llm) {
+      throw new Error(`[${this.name}] LLM instance is undefined — check ModelType and getLLM() config.`);
+    }
     let llmWithTools: ReturnType<typeof getLLM>;
     try {
       llmWithTools = this.tools.length > 0
         ? (this.llm as any).bindTools(this.tools)
         : this.llm;
+      if (!llmWithTools) throw new Error("bindTools returned undefined");
     } catch {
       llmWithTools = this.llm;
     }
@@ -87,8 +91,9 @@ export abstract class BaseAgent {
         response = await llmWithTools.invoke(messages);
       } catch (err) {
         const msg = String(err);
-        // Provider-level failures (403, 429, 5xx) — retry once with Groq fallback
-        if (/403|429|500|502|503|Provider returned error/i.test(msg) && this.modelType !== GROQ_FALLBACK) {
+        // Provider-level failures (4xx, 5xx) or network timeouts — retry once with Groq fallback
+        const isRetryable = /403|429|500|502|503|504|Provider returned error|ECONNRESET|ETIMEDOUT|timeout|network error/i.test(msg);
+        if (isRetryable && this.modelType !== GROQ_FALLBACK) {
           logger.warn("LLM", `[${this.name}] Provider error, falling back to Groq`, {
             agent: this.name, originalModel: this.modelType, error: msg.slice(0, 200),
           });
@@ -126,14 +131,25 @@ export abstract class BaseAgent {
               tool: tc.name,
               args: truncate(toolArgs),
             });
-            const result = await tool.invoke(toolArgs);
-            logger.info("TOOL", `[${this.name}] Tool result: ${tc.name}`, {
-              agent: this.name,
-              tool: tc.name,
-              resultPreview: truncate(result),
-            });
-            const resultStr = typeof result === "string" ? result : JSON.stringify(result);
-            onToolCall?.({ toolName: tc.name, toolInput: toolArgs, toolResult: resultStr });
+            let result: string;
+            try {
+              const raw = await tool.invoke(toolArgs);
+              result = typeof raw === "string" ? raw : JSON.stringify(raw);
+              logger.info("TOOL", `[${this.name}] Tool result: ${tc.name}`, {
+                agent: this.name,
+                tool: tc.name,
+                resultPreview: truncate(result),
+              });
+            } catch (toolErr) {
+              const errMsg = toolErr instanceof Error ? toolErr.message : String(toolErr ?? "Unknown tool error");
+              logger.warn("TOOL", `[${this.name}] Tool call failed (continuing): ${tc.name}`, {
+                agent: this.name,
+                tool: tc.name,
+                error: errMsg,
+              });
+              result = JSON.stringify({ error: `Tool ${tc.name} failed: ${errMsg}. Try a different approach or skip this tool.` });
+            }
+            onToolCall?.({ toolName: tc.name, toolInput: toolArgs, toolResult: result });
             messages.push(new ToolMessage({ content: result, tool_call_id: tc.id ?? `call_${iter}` }));
           }
         }
@@ -143,8 +159,15 @@ export abstract class BaseAgent {
       // Path 2: Text-based <tool_call> parsing (fallback for models without native function calling)
       const toolCallMatch = content.match(/<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/);
       if (toolCallMatch) {
+        let parsed: any;
         try {
-          const parsed = JSON.parse(toolCallMatch[1]);
+          parsed = JSON.parse(toolCallMatch[1]);
+        } catch {
+          // JSON parse failed — treat as plain text response
+          parsed = null;
+        }
+
+        if (parsed) {
           const tool = this.tools.find(t => t.name === parsed.name);
           if (tool) {
             // StructuredTool.invoke() expects an object — pass args directly (parse if string)
@@ -156,20 +179,29 @@ export abstract class BaseAgent {
               tool: parsed.name,
               args: truncate(toolArgs),
             });
-            const toolResult = await tool.invoke(toolArgs);
-            logger.info("TOOL", `[${this.name}] Text tool result: ${parsed.name}`, {
-              agent: this.name,
-              tool: parsed.name,
-              resultPreview: truncate(toolResult),
-            });
-            const resultStr = typeof toolResult === "string" ? toolResult : JSON.stringify(toolResult);
-            onToolCall?.({ toolName: parsed.name, toolInput: toolArgs, toolResult: resultStr });
+            let toolResultStr: string;
+            try {
+              const toolResult = await tool.invoke(toolArgs);
+              toolResultStr = typeof toolResult === "string" ? toolResult : JSON.stringify(toolResult);
+              logger.info("TOOL", `[${this.name}] Text tool result: ${parsed.name}`, {
+                agent: this.name,
+                tool: parsed.name,
+                resultPreview: truncate(toolResultStr),
+              });
+            } catch (toolErr) {
+              const errMsg = toolErr instanceof Error ? toolErr.message : String(toolErr ?? "Unknown tool error");
+              logger.warn("TOOL", `[${this.name}] Text tool call failed (continuing): ${parsed.name}`, {
+                agent: this.name,
+                tool: parsed.name,
+                error: errMsg,
+              });
+              toolResultStr = JSON.stringify({ error: `Tool ${parsed.name} failed: ${errMsg}. Try a different approach or skip this tool.` });
+            }
+            onToolCall?.({ toolName: parsed.name, toolInput: toolArgs, toolResult: toolResultStr });
             messages.push(new AIMessage(content));
-            messages.push(new HumanMessage(`Tool result for ${parsed.name}:\n${toolResult}\n\nContinue with the task.`));
+            messages.push(new HumanMessage(`Tool result for ${parsed.name}:\n${toolResultStr}\n\nContinue with the task.`));
             continue;
           }
-        } catch {
-          // JSON parse failed — treat as plain text response
         }
       }
 

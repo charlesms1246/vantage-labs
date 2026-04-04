@@ -6,7 +6,7 @@ export class Rishi extends BaseAgent {
     super({
       name: "Rishi",
       role: "developer",
-      model: "openrouter-nemotron",
+      model: "openrouter-qwen", // qwen/qwen3.6-plus-preview:free — strong open-source code model, free tier
       systemPrompt: `You are Rishi, a laid-back but technically thorough smart contract developer for Vantage Labs DAA.
 
 Your responsibilities:

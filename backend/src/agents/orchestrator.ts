@@ -1,6 +1,6 @@
 import { BaseAgent, ToolCallCallback } from "./base-agent";
 import { getLLM } from "../services/llm";
-import { HumanMessage, SystemMessage } from "@langchain/core/messages";
+import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
 import { v4 as uuidv4 } from "uuid";
 import { SessionState } from "../types";
 import { logger } from "../services/logger";
@@ -26,6 +26,8 @@ IMPORTANT RULES:
 - For NFT work: Yasmin generates the image first, then Rishi deploys the NFT contract
 - Each step's task description MUST explicitly say what output from the previous step to use
 - The task must be fully completed on-chain where applicable
+- If context is provided from previous conversation turns, USE it to adapt your plan.
+- If the user is just chatting or modifying a previous request, formulate a new appropriate plan.
 
 Respond ONLY with valid JSON (no markdown, no extra text):
 {
@@ -49,17 +51,44 @@ Respond ONLY with valid JSON (no markdown, no extra text):
     this.agents.set(agent.getName(), agent);
   }
 
-  async processUserRequest(userInput: string, sessionId: string, walletAddress = ""): Promise<SessionState> {
+  async processUserRequest(
+    userInput: string, 
+    sessionId: string, 
+    walletAddress = "",
+    chatHistory: { role: "user" | "assistant"; content: string }[] = []
+  ): Promise<SessionState> {
+    const contextualSystemPrompt = `${this.systemPrompt}
+
+User Memory / Context:
+- Connected Wallet Address: ${walletAddress || "Not connected"}
+- Session ID: ${sessionId}
+
+Crucial Interaction Rule:
+If an agent or step requires user input or missing information (e.g. they need a wallet address and it says "Not connected"), DO NOT generate a plan with random assumptions or fake addresses. 
+Instead, output a JSON plan with NO steps and use the 'intent' field to directly ask the user for the specific missing information. This intent string will be shown to the user in the Agent Chat tab. E.g.:
+{
+  "intent": "I need your receiving wallet address to proceed with the transfer.",
+  "agents": [],
+  "steps": [],
+  "requiresApproval": false,
+  "onChainActions": []
+}`;
+
     logger.info("LLM", "[Orchestrator] Generating plan", {
       agent: "Orchestrator",
       model: "groq/llama-3.3-70b-versatile",
       sessionId,
       inputPreview: userInput.slice(0, 200),
+      historyLength: chatHistory.length,
     });
-    const planResponse = await this.llm.invoke([
-      new SystemMessage(this.systemPrompt),
+
+    const messages = [
+      new SystemMessage(contextualSystemPrompt),
+      ...chatHistory.map(m => m.role === "user" ? new HumanMessage(m.content) : new AIMessage(m.content)),
       new HumanMessage(userInput),
-    ]);
+    ];
+
+    const planResponse = await this.llm.invoke(messages);
 
     let plan: Record<string, unknown>;
     try {
@@ -96,6 +125,7 @@ Respond ONLY with valid JSON (no markdown, no extra text):
       sessionId,
       walletAddress,
       messages: [],
+      chatHistory,
       plan: JSON.stringify(plan, null, 2),
       status: "pending_approval",
       results: [],
@@ -135,25 +165,45 @@ Respond ONLY with valid JSON (no markdown, no extra text):
       });
       onProgress?.({ agent: step.agent, task: step.task, status: "executing" });
 
-      // Enrich the task with context from previous steps
+      // Enrich the task with context from previous steps and explicitly pass the user wallet
+      const walletContext = `\n--- Global Context ---\nUser Wallet Address: ${session.walletAddress || "Not connected"}\n----------------------\n`;
       const enrichedTask = sharedContext
-        ? `${step.task}\n\n--- Context from previous agents ---\n${sharedContext}\n--- End context ---`
-        : step.task;
+        ? `${step.task}\n${walletContext}\n--- Context from previous agents ---\n${sharedContext}\n--- End context ---`
+        : `${step.task}\n${walletContext}`;
 
       const onToolCall: ToolCallCallback = ({ toolName, toolInput, toolResult }) => {
         onProgress?.({ agent: step.agent, toolName, toolInput, toolResult, status: "tool_use" });
       };
 
-      const result = await this.executeStep(step.agent, enrichedTask, onToolCall);
+      let result: string;
+      try {
+        result = await this.executeStep(step.agent, enrichedTask, onToolCall);
+      } catch (stepErr) {
+        const errMsg = stepErr instanceof Error ? stepErr.message : String(stepErr ?? "Unknown error");
+        result = `[⚠️  Error in step ${i + 1} (${step.agent}): ${errMsg}. Continuing with next step.]`;
+        logger.error("SYSTEM", `[Orchestrator] Step ${i + 1}/${steps.length} failed (resilient): ${step.agent}`, {
+          agent: step.agent,
+          error: errMsg,
+        });
+        onProgress?.({
+          agent: step.agent,
+          task: step.task,
+          status: "error",
+          result,
+        });
+      }
+
       results.push({ agent: step.agent, task: step.task, result });
 
       // Append this agent's output to the shared context for subsequent steps
       sharedContext += `\n\n[${step.agent}]: ${result}`;
 
-      logger.info("SYSTEM", `[Orchestrator] Step ${i + 1}/${steps.length} complete: ${step.agent}`, {
-        agent: step.agent,
-        resultPreview: result.slice(0, 200),
-      });
+      if (!result.includes("⚠️  Error")) {
+        logger.info("SYSTEM", `[Orchestrator] Step ${i + 1}/${steps.length} complete: ${step.agent}`, {
+          agent: step.agent,
+          resultPreview: result.slice(0, 200),
+        });
+      }
       onProgress?.({
         agent: step.agent,
         task: step.task,

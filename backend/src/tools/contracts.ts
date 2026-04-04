@@ -176,7 +176,8 @@ export class GenerateContractTool extends StructuredTool {
 
       throw new Error(`Unknown contract type: ${type}`);
     } catch (err) {
-      return JSON.stringify({ error: `Failed to load contract artifact: ${(err as Error).message}` });
+      const errMsg = err instanceof Error ? err.message : String(err ?? 'Unknown error');
+      return JSON.stringify({ error: `Failed to load contract artifact: ${errMsg}` });
     }
   }
 }
@@ -185,13 +186,23 @@ export class DeployContractTool extends StructuredTool {
   name = "deploy_contract";
   description =
     "Deploy a compiled smart contract to Flow EVM Testnet using the deployer wallet. Pass the full output from generate_contract directly. Returns the deployed contract address, txHash, and FlowScan links.";
+  // .passthrough() lets extra fields from generate_contract output (type, note) flow through
+  // without Zod rejecting the payload. abi accepts both an array or a JSON string.
   schema = z.object({
     bytecode: z.string().describe("Contract bytecode hex string"),
-    abi: z.array(z.unknown()).describe("Contract ABI array"),
+    abi: z
+      .union([
+        z.array(z.unknown()),
+        z.string().transform((s) => JSON.parse(s)),
+      ])
+      .describe("Contract ABI — array or JSON-stringified array from generate_contract"),
     constructorArgs: z.array(z.unknown()).optional().describe("Constructor arguments array"),
     label: z.string().optional().describe("Human-readable label for the contract"),
     name: z.string().optional().describe("Contract name"),
     symbol: z.string().optional().describe("Token symbol"),
+    // accept extra fields emitted by generate_contract (type, note) without throwing
+    type: z.string().optional(),
+    note: z.string().optional(),
   });
 
   async _call({ bytecode, abi, constructorArgs = [], label, name, symbol }: {
@@ -201,9 +212,17 @@ export class DeployContractTool extends StructuredTool {
     label?: string;
     name?: string;
     symbol?: string;
+    type?: string;
+    note?: string;
   }): Promise<string> {
     if (!bytecode || !abi) {
       return JSON.stringify({ error: "Missing required fields: bytecode and abi. Run generate_contract first." });
+    }
+
+    // Early-exit with a clear message rather than a cryptic ethers error
+    const { config } = await import("../config/env");
+    if (!config.DEPLOYER_PRIVATE_KEY) {
+      return JSON.stringify({ error: "DEPLOYER_PRIVATE_KEY is not set in .env — cannot deploy. Add the deployer wallet private key and restart." });
     }
 
     const contractLabel = label || name || "UnnamedContract";
@@ -213,7 +232,19 @@ export class DeployContractTool extends StructuredTool {
       const factory = new ethers.ContractFactory(abi, bytecode, wallet);
 
       logger.info("ONCHAIN", `[Rishi] Deploying ${contractLabel} to Flow EVM Testnet`, { contractLabel, name, symbol, network: "flow-evm-testnet" });
-      const contract = await factory.deploy(...constructorArgs);
+
+      // Flow EVM testnet can under-report gas estimates; pad with a fixed limit
+      // to prevent "transaction ran out of gas" reverts on large contracts.
+      const deployTxReq = await factory.getDeployTransaction(...constructorArgs);
+      let gasLimit: bigint;
+      try {
+        const estimated = await wallet.estimateGas(deployTxReq);
+        gasLimit = (estimated * 130n) / 100n; // +30% headroom
+      } catch {
+        gasLimit = 3_000_000n; // safe fallback for Flow EVM
+      }
+
+      const contract = await factory.deploy(...constructorArgs, { gasLimit });
       await contract.waitForDeployment();
 
       const address = await contract.getAddress();
@@ -223,6 +254,7 @@ export class DeployContractTool extends StructuredTool {
       logger.info("ONCHAIN", `[Rishi] Contract deployed: ${contractLabel}`, {
         address,
         txHash,
+        gasLimit: gasLimit.toString(),
         explorerUrl: `https://evm-testnet.flowscan.io/tx/${txHash}`,
         contractUrl: `https://evm-testnet.flowscan.io/address/${address}`,
         network: "flow-evm-testnet",
@@ -239,7 +271,7 @@ export class DeployContractTool extends StructuredTool {
 
       return JSON.stringify({
         success: true,
-        contractLabel, address, txHash,
+        contractLabel, address, txHash, gasLimit: gasLimit.toString(),
         network: "flow-evm-testnet", chainId: 545,
         explorerUrl: `https://evm-testnet.flowscan.io/tx/${txHash}`,
         contractUrl: `https://evm-testnet.flowscan.io/address/${address}`,
@@ -247,8 +279,9 @@ export class DeployContractTool extends StructuredTool {
         message: `Successfully deployed ${contractLabel} to Flow EVM Testnet at ${address}`,
       });
     } catch (err) {
-      logger.error("ONCHAIN", `[Rishi] Deployment failed: ${contractLabel}`, { error: (err as Error).message, contractLabel, network: "flow-evm-testnet" });
-      return JSON.stringify({ error: (err as Error).message });
+      const errMsg = err instanceof Error ? err.message : String(err ?? 'Unknown error');
+      logger.error("ONCHAIN", `[Rishi] Deployment failed: ${contractLabel}`, { error: errMsg, contractLabel, network: "flow-evm-testnet" });
+      return JSON.stringify({ error: `Deployment failed: ${errMsg}` });
     }
   }
 }

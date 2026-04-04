@@ -15,6 +15,7 @@ export interface SessionState {
   sessionId: string;
   walletAddress: string;
   messages: AgentMessage[];
+  chatHistory: { role: "user" | "assistant"; content: string }[];
   plan: string;
   status: "idle" | "planning" | "pending_approval" | "executing" | "complete" | "cancelled";
   results: unknown[];

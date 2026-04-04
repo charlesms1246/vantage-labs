@@ -43,6 +43,44 @@ class FlowService {
     return receipt.hash;
   }
 
+  async transferETH(to: string, amount: bigint): Promise<string> {
+    const tx = await this.wallet.sendTransaction({
+      to,
+      value: amount
+    });
+    const receipt = await tx.wait();
+    return receipt?.hash ?? tx.hash;
+  }
+
+  async transferToken(contractAddress: string, to: string, amount: bigint): Promise<string> {
+    const token = new ethers.Contract(contractAddress, [
+      "function transfer(address to, uint256 amount) external returns (bool)"
+    ], this.wallet);
+    const tx = await token.transfer(to, amount);
+    const receipt = await tx.wait();
+    return receipt?.hash ?? tx.hash;
+  }
+
+  async transferNFT(contractAddress: string, from: string, to: string, tokenId: string): Promise<string> {
+    const nft = new ethers.Contract(contractAddress, [
+      "function transferFrom(address from, address to, uint256 tokenId) external",
+      "function safeTransferFrom(address from, address to, uint256 tokenId) external"
+    ], this.wallet);
+    const tx = await nft.transferFrom(from, to, tokenId);
+    const receipt = await tx.wait();
+    return receipt?.hash ?? tx.hash;
+  }
+
+  async interactContract(contractAddress: string, abi: any[], methodName: string, args: unknown[]): Promise<string> {
+    const contract = new ethers.Contract(contractAddress, abi, this.wallet);
+    if (!contract[methodName]) {
+      throw new Error(`Method ${methodName} not found in ABI`);
+    }
+    const tx = await contract[methodName](...args);
+    const receipt = await tx.wait();
+    return receipt?.hash ?? tx.hash;
+  }
+
   async getBalance(address: string): Promise<bigint> {
     return flowProvider.getBalance(address);
   }
