@@ -1,0 +1,20 @@
+{
+  "network": "flow-evm-testnet",
+  "chainId": 545,
+  "deployedAt": "2026-04-03T23:12:11.916Z",
+  "deployer": "0xce4389ACb79463062c362fACB8CB04513fA3D8D8",
+  "contracts": {
+    "ERC1155MultiToken": {
+      "address": "0x8e0E65541EaDE9B8D5d69519A67923CE89263a06"
+    },
+    "NFTMarketplace": {
+      "address": "0xAa61FAD0c0270905264395c29817343C8d0998f3"
+    },
+    "SimpleDAO": {
+      "address": "0xFBD6428dE890599A15FebC2D8F2bda945f693bBD"
+    },
+    "StakingRewards": {
+      "address": "0xa75A41ab96f2387fD2360E5FBa85A0f0EF2F431a"
+    }
+  }
+}
