@@ -25,10 +25,6 @@ Vantage Labs is a Decentralized Autonomous Agency (DAA) — a multi-agent AI sys
 
 ```mermaid
 graph TD
-    classDef frontend fill:#f9f,stroke:#333,stroke-width:1px;
-    classDef backend fill:#bbf,stroke:#333,stroke-width:1px;
-    classDef infra fill:#bfb,stroke:#333,stroke-width:1px;
-
     User((User)) --- FE
     
     subgraph FE [Frontend: Next.js 16 + Privy Wallet]
@@ -44,8 +40,8 @@ graph TD
             direction LR
             Eric[Eric: MiniMax]
             Harper[Harper: Llama-3]
-            Rishi[Rishi: Nemotron]
-            Yasmin[Yasmin: Gemini]
+            Rishi[Rishi: Qwen 3.6 Pro]
+            Yasmin[Yasmin: Qwen3 + Nano Banana]
         end
         ORC <--> Swarm
     end
@@ -58,11 +54,13 @@ graph TD
     subgraph FLOW [Flow EVM: Execution]
         direction TB
         F1[Proof NFTs]
-        F2[VTG Tokens]
+        F2[VTG & VPG Tokens]
     end
 
     subgraph LH [Lighthouse: IPFS Gateway]
-        L1[Persistent Logging]
+        L1[Persistent Chat Logs]
+        L2[Image Storage]
+        L3[Image CID Storage]
     end
 
     subgraph FIL [Filecoin Calibnet: Identity]
