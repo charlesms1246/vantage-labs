@@ -13,6 +13,14 @@ export interface AgentConfig {
   tools: StructuredTool[];
 }
 
+export interface ToolCallCallback {
+  (data: {
+    toolName: string;
+    toolInput: unknown;
+    toolResult: string;
+  }): void;
+}
+
 const MAX_TOOL_ITERATIONS = 6;
 
 function truncate(value: unknown, maxChars = 500): unknown {
@@ -46,7 +54,7 @@ export abstract class BaseAgent {
     this.llm = getLLM(agentConfig.model);
   }
 
-  async invoke(input: string, _context?: Record<string, unknown>): Promise<string> {
+  async invoke(input: string, _context?: Record<string, unknown>, onToolCall?: ToolCallCallback): Promise<string> {
     const toolInstructions = this.buildToolInstructions();
     const messages: BaseMessage[] = [
       new SystemMessage(this.systemPrompt + toolInstructions),
@@ -124,6 +132,8 @@ export abstract class BaseAgent {
               tool: tc.name,
               resultPreview: truncate(result),
             });
+            const resultStr = typeof result === "string" ? result : JSON.stringify(result);
+            onToolCall?.({ toolName: tc.name, toolInput: toolArgs, toolResult: resultStr });
             messages.push(new ToolMessage({ content: result, tool_call_id: tc.id ?? `call_${iter}` }));
           }
         }
@@ -152,6 +162,8 @@ export abstract class BaseAgent {
               tool: parsed.name,
               resultPreview: truncate(toolResult),
             });
+            const resultStr = typeof toolResult === "string" ? toolResult : JSON.stringify(toolResult);
+            onToolCall?.({ toolName: parsed.name, toolInput: toolArgs, toolResult: resultStr });
             messages.push(new AIMessage(content));
             messages.push(new HumanMessage(`Tool result for ${parsed.name}:\n${toolResult}\n\nContinue with the task.`));
             continue;

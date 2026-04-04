@@ -14,6 +14,10 @@ export class WebSocketHandler {
     this.setupHandlers();
   }
 
+  private getErrorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : error != null ? String(error) : 'Unknown error';
+  }
+
   private setupHandlers(): void {
     this.io.on("connection", (socket: Socket) => {
       logger.info("WS", "Client connected", { socketId: socket.id });
@@ -64,8 +68,9 @@ export class WebSocketHandler {
       // Auto-execute without waiting for client approval
       await this.executeSession(socket, sessionId);
     } catch (error: unknown) {
-      logger.error("WS", "handleUserMessage error", { error: (error as Error).message, sessionId });
-      socket.emit(WS_EVENTS.ERROR, { message: (error as Error).message, sessionId });
+      const errMsg = this.getErrorMessage(error);
+      logger.error("WS", "handleUserMessage error", { error: errMsg, sessionId });
+      socket.emit(WS_EVENTS.ERROR, { message: errMsg, sessionId });
     }
   }
 
@@ -95,7 +100,7 @@ export class WebSocketHandler {
           sessionId,
         });
       } catch (uploadError) {
-        logger.error("IPFS", "Lighthouse upload failed", { error: (uploadError as Error).message, sessionId });
+        logger.error("IPFS", "Lighthouse upload failed", { error: this.getErrorMessage(uploadError), sessionId });
       }
 
       // Record Lighthouse CID on-chain (Flow EVM Testnet) via SampleNFT mint
@@ -114,7 +119,7 @@ export class WebSocketHandler {
             sessionId,
           });
         } catch (chainError) {
-          logger.error("ONCHAIN", "On-chain proof recording failed", { error: (chainError as Error).message, sessionId });
+          logger.error("ONCHAIN", "On-chain proof recording failed", { error: this.getErrorMessage(chainError), sessionId });
         }
       }
 
@@ -132,8 +137,9 @@ export class WebSocketHandler {
         status: "success",
       });
     } catch (error: unknown) {
-      logger.error("WS", "Execution error", { error: (error as Error).message, sessionId });
-      socket.emit(WS_EVENTS.ERROR, { message: (error as Error).message, sessionId });
+      const errMsg = this.getErrorMessage(error);
+      logger.error("WS", "Execution error", { error: errMsg, sessionId });
+      socket.emit(WS_EVENTS.ERROR, { message: errMsg, sessionId });
     }
   }
 }

@@ -1,4 +1,4 @@
-import { BaseAgent } from "./base-agent";
+import { BaseAgent, ToolCallCallback } from "./base-agent";
 import { getLLM } from "../services/llm";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { v4 as uuidv4 } from "uuid";
@@ -104,7 +104,7 @@ Respond ONLY with valid JSON (no markdown, no extra text):
     return session;
   }
 
-  async executeStep(agentName: string, task: string): Promise<string> {
+  async executeStep(agentName: string, task: string, onToolCall?: ToolCallCallback): Promise<string> {
     let agent = this.agents.get(agentName);
     if (!agent) {
       const normalizedName = Array.from(this.agents.keys()).find(
@@ -113,7 +113,7 @@ Respond ONLY with valid JSON (no markdown, no extra text):
       agent = normalizedName ? this.agents.get(normalizedName) : undefined;
     }
     if (!agent) return `Error: Agent ${agentName} not found`;
-    return agent.invoke(task);
+    return agent.invoke(task, undefined, onToolCall);
   }
 
   async executePlan(
@@ -140,7 +140,11 @@ Respond ONLY with valid JSON (no markdown, no extra text):
         ? `${step.task}\n\n--- Context from previous agents ---\n${sharedContext}\n--- End context ---`
         : step.task;
 
-      const result = await this.executeStep(step.agent, enrichedTask);
+      const onToolCall: ToolCallCallback = ({ toolName, toolInput, toolResult }) => {
+        onProgress?.({ agent: step.agent, toolName, toolInput, toolResult, status: "tool_use" });
+      };
+
+      const result = await this.executeStep(step.agent, enrichedTask, onToolCall);
       results.push({ agent: step.agent, task: step.task, result });
 
       // Append this agent's output to the shared context for subsequent steps
