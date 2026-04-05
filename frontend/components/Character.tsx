@@ -21,7 +21,7 @@ export class Character {
     userId: string;
     address?: `0x${string}`;
     currentBubbleDimensions: CharacterBounds | null = null;
-    private messageHandler: (data: unknown) => void;
+    //private messageHandler: (data: unknown) => void;
 
     constructor(
         index: number,
