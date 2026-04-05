@@ -21,6 +21,10 @@ Vantage Labs is a Decentralized Autonomous Agency (DAA) — a multi-agent AI sys
 - **Terminal Interface**: Retro-style terminal UI for interacting with the agent swarm
 - **Multi-LLM Backend**: Groq, Gemini, and OpenRouter power different agents for specialized performance
 
+> **Note:**
+> - The project uses free tier LLM models from multiple inference providers, this can cause delays in the Agent processes and events.
+> - It is recommended to use gemini API key from an account which has access to the paid `gemini-2.5-flash-image` model for the NFT creation feature, if you just testing out the product, use a generic API key and the system by default will fallback to picsum (random image generator).
+
 ## Architecture
 
 ```mermaid
